@@ -115,8 +115,11 @@
 #define WA_LOCKLIST    22 //AHF
 #define WA_FILELOCK    23 //AHF
 #define WA_INDEXUNIQUE 24//AHF
-#define WA_OPENSHARED      25//AHF
-#define WA_SIZE        25
+#define WA_OPENSHARED  25//AHF
+#define WA_SCOPES      26//AHF
+#define WA_SCOPETOP    27//AHF
+#define WA_SCOPEBOT    28//AHF
+#define WA_SIZE        28
 
 #define RDD_CONNECTION 1
 #define RDD_CATALOG    2
@@ -161,6 +164,9 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_FILELOCK] := .F.
    aWAData[WA_INDEXUNIQUE] := {}
    aWAData[WA_OPENSHARED] := .T.
+   aWAData[WA_SCOPES] := {}
+   aWAData[WA_SCOPETOP] := {}
+   aWAData[WA_SCOPEBOT] := {}
    
    USRRDD_AREADATA( nWA, aWAData )
 
@@ -730,29 +736,34 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
        
    DO CASE
    CASE nIndex == DBOI_EXPRESSION
+
    		IF ! Empty( aWAData[ WA_INDEXEXP ] ) .AND. !Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND.;
            aOrderInfo[ UR_ORI_TAG ] <= len(aWAData[ WA_INDEXEXP ])
            aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXEXP ][aOrderInfo[ UR_ORI_TAG]]
-		  // aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ],",","+")
-		  // aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ],"ASC","")
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := ""
         ENDIF
-   CASE nIndex == DBOI_CONDITION		
+		
+   CASE nIndex == DBOI_CONDITION	
+   
 		IF ! Empty( aWAData[ WA_INDEXFOR ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
             aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXFOR ])
             aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXFOR ][aOrderInfo[ UR_ORI_TAG]]
 		ELSE
           aOrderInfo[ UR_ORI_RESULT ] :=""
 		ENDIF
+		
    CASE nIndex == DBOI_NAME
+   
         IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
            aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
            aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
          ELSE
             aOrderInfo[ UR_ORI_RESULT ] := ""
         ENDIF
+		
    CASE nIndex == DBOI_NUMBER
+   
 		IF VALTYPE(aOrderInfo[ UR_ORI_TAG ]) = "N"
 		   aOrderInfo[ UR_ORI_RESULT ] := aOrderInfo[ UR_ORI_TAG ]
 		ELSE   
@@ -763,67 +774,207 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
                aOrderInfo[ UR_ORI_RESULT ] := 0
             ENDIF
 		ENDIF	
+		
    CASE nIndex == DBOI_BAGNAME
+   
         IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
             aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
             aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := ""
         ENDIF
+		
    CASE nIndex == DBOI_BAGEXT
+   
         aOrderInfo[ UR_ORI_RESULT ] := ""
+		
    CASE nIndex == DBOI_ORDERCOUNT
+   
         IF ! Empty( aWAData[ WA_INDEXES ] )
            aOrderInfo[ UR_ORI_RESULT ] := LEN(aWAData[ WA_INDEXES ])
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
         ENDIF
+		
    CASE nIndex == DBOI_FILEHANDLE
+   
         aOrderInfo[ UR_ORI_RESULT ] := -1
+		
    CASE nIndex == DBOI_ISCOND
+   
 		IF ! Empty( aWAData[ WA_INDEXFOR ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
             aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXFOR ])
             aOrderInfo[ UR_ORI_RESULT ] := EMPTY(aWAData[ WA_INDEXFOR ][aOrderInfo[ UR_ORI_TAG]])
 		ELSE
           aOrderInfo[ UR_ORI_RESULT ] :=.F.
 		ENDIF
+		
    CASE nIndex == DBOI_ISDESC
+   
         aOrderInfo[ UR_ORI_RESULT ] :=.F. //ITS REALLY NEVER USED
    
    CASE nIndex == DBOI_UNIQUE
+   
 		IF ! Empty( aWAData[ WA_INDEXUNIQUE ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
             aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXUNIQUE ])
             aOrderInfo[ UR_ORI_RESULT ] := EMPTY(aWAData[ WA_INDEXUNIQUE ][aOrderInfo[ UR_ORI_TAG]])
 		ELSE
           aOrderInfo[ UR_ORI_RESULT ] :=.F.
 		ENDIF
+		
    CASE nIndex == DBOI_POSITION
+   
         IF aWAData[ WA_CONNECTION ]:State != adStateClosed
            ADO_RECID( nWA, @aOrderInfo[ UR_ORI_RESULT ] )
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
            nResult := HB_FAILURE
         ENDIF
+		
    CASE nIndex == DBOI_RECNO
+   
         IF aWAData[ WA_CONNECTION ]:State != adStateClosed
            ADO_RECID( nWA, @aOrderInfo[ UR_ORI_RESULT ] )
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
            nResult := HB_FAILURE
         ENDIF
+		
    CASE nIndex == DBOI_KEYCOUNT
+   
         IF aWAData[ WA_CONNECTION ]:State != adStateClosed
            aOrderInfo[ UR_ORI_RESULT ] := ADORECCOUNT(nWA,oRecordSet) // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
            nResult := HB_FAILURE
         ENDIF
-   CASE nIndex == DBOI_KEYVAL
+		
+   CASE nIndex == DBOI_SCOPESET .OR. nIndex == DBOI_SCOPEBOTTOM .OR. nIndex == DBOI_SCOPEBOTTOMCLEAR ;
+	    .OR. nIndex == DBOI_SCOPECLEAR .OR. nIndex == DBOI_SCOPETOP .OR. nIndex == DBOI_SCOPETOPCLEAR
 
+	    aOrderInfo[ UR_ORI_RESULT ] := ADOSCOPE( AWAData,oRecordset, aOrderInfo,nIndex)
+	 
    ENDCASE
    
    RETURN nResult
+   
+STATIC FUNCTION ADOSCOPE(aWAdata, oRecordSet, aOrderInfo,nIndex)
+ LOCAL y, cScopeExp :="", cSql :=""
 
+   //[UR_ORI_NEWVAL] comes with actual scope top or bottom and returns the former active scope if any
+   IF VALTYPE(aOrderInfo[ UR_ORI_NEWVAL ]) = "B"
+      aOrderInfo[ UR_ORI_NEWVAL ] := EVAL(aOrderInfo[ UR_ORI_NEWVAL ])
+   ENDIF
+   
+   //SET SCOPE TO NO ARGS
+   IF aOrderInfo[ UR_ORI_NEWVAL ] = NIL
+      aOrderInfo[ UR_ORI_NEWVAL ] := ""
+   ENDIF
+   
+   IF EMPTY(aWAdata[WA_INDEXACTIVE]) .OR. aWAdata[WA_INDEXACTIVE] = 0 //NO INDEX NO SCOPE
+      aOrderInfo[ UR_ORI_RESULT ] := NIL
+      RETURN HB_FAILURE
+   ENDIF
+   
+   y:=ASCAN( aWAData[ WA_SCOPES ], aWAData[WA_INDEXACTIVE]  )
+
+   DO CASE
+   CASE nIndex == DBOI_SCOPESET //never gets called noy tested might be completly wrong!
+ 
+       IF y > 0
+		   aWAData[ WA_SCOPETOP ][y] := aOrderInfo[ UR_ORI_NEWVAL ]
+		   aWAData[ WA_SCOPEBOT ][y] := aOrderInfo[ UR_ORI_NEWVAL ]
+		ELSE
+	       AADD( aWAData[ WA_SCOPES ],aWAData[ WA_INDEXACTIVE ])
+		   AADD(aWAData[ WA_SCOPETOP ],aOrderInfo[ UR_ORI_NEWVAL ])
+		   AADD(aWAData[ WA_SCOPEBOT ],aOrderInfo[ UR_ORI_NEWVAL ])
+        ENDIF		
+        aOrderInfo[ UR_ORI_RESULT ] := NIL
+
+   CASE nIndex == DBOI_SCOPECLEAR //never gets called noy tested might be completly wrong!
+   
+        IF y > 0
+		   ADEL(aWAData[ WA_SCOPES ],y,.T.)
+		   ADEL(aWAData[ WA_SCOPETOP ],y,.T.)
+		   ADEL(aWAData[ WA_SCOPEBOT ],y,.T.)
+        ENDIF		
+		aOrderInfo[ UR_ORI_RESULT ] := NIL //RETURN ACUTAL SCOPETOP NIL IF NONE
+
+   CASE nIndex == DBOI_SCOPETOP
+
+        IF y > 0
+		   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_SCOPETOP ][y] //RETURN ACTUALSCOPE TOP
+		   aWAData[ WA_SCOPETOP ][y] := aOrderInfo[ UR_ORI_NEWVAL ]
+		   IF LEN(aWAData[ WA_SCOPEBOT ]) < y
+		      AADD(aWAData[ WA_SCOPEBOT ],SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPETOP ][y])))) //THERE INST STILL A SCOPEBOT ARRAYS MUST HAVE  SAME LEN
+		   ENDIF	  
+		ELSE
+		   AADD(aWAData[ WA_SCOPETOP ],aOrderInfo[ UR_ORI_NEWVAL ])
+		   AADD(aWAData[ WA_SCOPEBOT ],SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPETOP ][1])))) //THERE INST STILL A SCOPEBOT ARRAYS MUST HAVE  SAME LEN
+		   aOrderInfo[ UR_ORI_RESULT ] := ""
+        ENDIF		
+	 
+   CASE nIndex == DBOI_SCOPEBOTTOM
+
+        IF y > 0
+		   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_SCOPEBOT ][y] //RETURN ACTUALSCOPE TOP
+		   aWAData[ WA_SCOPEBOT ][y] := aOrderInfo[ UR_ORI_NEWVAL ]
+   		   IF LEN(aWAData[ WA_SCOPETOP ]) < y
+		      AADD(aWAData[ WA_SCOPETOP ],SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPEBOT ][y])))) //THERE INST STILL A SCOPETOP ARRAYS MUST HAVE  SAME LEN
+		   ENDIF	  
+		ELSE
+	       AADD( aWAData[ WA_SCOPES ],aWAData[ WA_INDEXACTIVE ])
+		   AADD(aWAData[ WA_SCOPEBOT ],aOrderInfo[ UR_ORI_NEWVAL ])
+		   AADD(aWAData[ WA_SCOPETOP ],SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPEBOT ][1])))) //THERE INST STILL A SCOPETOP ARRAYS MUST HAVE  SAME LEN
+		   aOrderInfo[ UR_ORI_RESULT ] := ""
+        ENDIF		
+
+   CASE nIndex == DBOI_SCOPETOPCLEAR
+   
+       IF y > 0
+		   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_SCOPETOP ][y] //RETURN ACTUALSCOPE TOP
+		   aWAData[ WA_SCOPETOP ][y] := SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPEBOT ][y])))
+		ELSE
+		   aOrderInfo[ UR_ORI_RESULT ] := "" //RETURN ACTUALSCOPE TOP IF NONE
+        ENDIF		
+		
+   CASE nIndex == DBOI_SCOPEBOTTOMCLEAR
+   
+       IF y > 0
+		   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_SCOPEBOT ][y] //RETURN ACTUALSCOPE TOP
+		   aWAData[ WA_SCOPEBOT ][y] := SPACE(LEN(CVALTOCHAR(aWAData[ WA_SCOPETOP ][y])))
+		ELSE
+		   aOrderInfo[ UR_ORI_RESULT ] := "" //RETURN ACTUALSCOPE TOP IF NONE
+        ENDIF		
+
+   ENDCASE
+
+   //ONLY BUILDS QUERY AFTER ALL DONE ASSUME THAT ALWAYS CLLED IN PAIRS OTHERWISE WILL GET ERROR   
+   IF nIndex = DBOI_SCOPEBOTTOM  .OR. nIndex = DBOI_SCOPEBOTTOMCLEAR 
+   
+      IF y = 0  //IF DIDNT FOUND ANY ITS THE FIRST ONE THAT JUST BEEN ADD
+	     y := 1
+	  ENDIF	 
+	  
+	  IF y <= LEN(aWAData[ WA_SCOPES ])  //EXIST SCOPE ARRAY ALREADY
+         IF LEN(ALLTRIM(aWAData[ WA_SCOPETOP ][y]+aWAData[ WA_SCOPEBOT ][y])) > 0
+            cScopeEXp := ADOPSEUDOSEEK(aWAData[ WA_SCOPETOP ][y],aWAData,,.T.,aWAData[ WA_SCOPEBOT ][y])[2]
+	    ELSE
+	       cScopeExp :=""
+        ENDIF	  
+     ELSE 
+	    cScopeExp :=""
+	 ENDIF
+	 
+      cSql := IndexBuildExp(aWAData[ WA_INDEXACTIVE ],aWAData,,cScopeExp)
+	  oRecordSet:Close()
+	  oRecordSet:open(cSql,aWAData[ WA_CONNECTION ])
+	  
+   ENDIF
+   
+  RETURN HB_SUCCESS
+  
+  
 STATIC FUNCTION ADO_FIELDNAME( nWA, nField, cFieldName )
 
    LOCAL nResult := HB_SUCCESS
@@ -914,7 +1065,7 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
    LOCAL nRecNo
    LOCAL aWAData    := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL cSql:="" 
+   LOCAL cSql:="" ,n
    
    HB_SYMBOL_UNUSED( nWA )
    HB_SYMBOL_UNUSED( aOrderInfo )
@@ -1089,20 +1240,17 @@ STATIC FUNCTION ADO_ORDLSTADD( nWA, aOrderInfo )
 	cOrder := UPPER(CFILENOEXT(cOrder))
 	
     //TMP FILES NOT PRESENT IN ListIndex ADDED TO THEIR OWN ARRAY FOR THE DURATION OF THE APP
-    IF UPPER(SUBSTR(cOrder,1,3)) IN aTempFiles .OR. UPPER(SUBSTR(cOrder,1,4)) IN aTempFiles
+    IF ASCAN(aTempFiles,UPPER(SUBSTR(cOrder,1,3)) ) > 0 .OR. ASCAN(aTempFiles,UPPER(SUBSTR(cOrder,1,4)) ) > 0
 	   //it was added to the array by ado_ordcreate we have only to set focus
 	   cIndex := cOrder //aOrderInfo[UR_ORI_BAG] CAN NOT CONTAIN PATH OR FILESXT
 	   y := ASCAN(aTmpIndx,cIndex)
 	   AADD( aWAData[WA_INDEXES],cIndex)
 	   AADD( aWAData[WA_INDEXEXP],aTmpExp[y])
-	   IF y <= LEN(aWAData[WA_INDEXFOR]) 
-	      AADD( aWAData[WA_INDEXFOR],"WHERE "+aTmpFor[y])
-	   ENDIF
-	   IF y <= LEN(aWAData[WA_INDEXUNIQUE]) 
-  	      AADD( aWAData[WA_INDEXUNIQUE],aTmpUnique[y])
-	   ENDIF	  
+       AADD( aWAData[WA_INDEXFOR],"WHERE "+aTmpFor[y])
+       AADD( aWAData[WA_INDEXUNIQUE],aTmpUnique[y])
 	   aWAData[WA_INDEXACTIVE] := 1 //always qst one
-	   aOrderInfo[UR_ORI_TAG] := 1
+	   aOrderInfo[UR_ORI_TAG] := 1 //1
+  
 	   ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 	   RETURN HB_SUCCESS
 	ENDIF
@@ -1157,7 +1305,10 @@ STATIC FUNCTION ADO_ORDLSTCLEAR( nWA )
    aWAData[WA_INDEXFOR] := {}
    aWAData[WA_INDEXACTIVE] := 0
    aWAData[WA_INDEXUNIQUE] := {}
-   
+   aWAData[WA_SCOPES] := {}
+   aWAData[WA_SCOPETOP] := {}
+   aWAData[WA_SCOPEBOT] := {}
+
    ADO_RECID( nWA, @nRecNo )
    oRecordSet:Close()
    /* AHF NOT NEEDED ONLY IF YOU WANT TO CHANGE IT OTHERWISE STAYS AS IT WAS WHEN OPENING IT
@@ -1185,7 +1336,7 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
    LOCAL aTmpUnique := ListTmpUnique() , N ,AA:={}
    
    //TMP FILES NOT PRESENT IN ListIndex
-   IF UPPER(SUBSTR(cIndex,1,3)) IN aTempFiles .OR. UPPER(SUBSTR(cIndex,1,4)) IN aTempFiles
+   IF ASCAN(aTempFiles,(UPPER(SUBSTR(cIndex,1,3)) )) > 0 .OR. ASCAN(aTempFiles,UPPER(SUBSTR(cIndex,1,4)) ) > 0
       y := 1
       DO WHILE ASCAN( aTmpIndx,cIndex) > 0 //no other with same name
 	     y++
@@ -1196,12 +1347,14 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
 	     // BUILD ERROR
 	  ENDIF
    ENDIF
-   
+ 
     AADD(aTmpIndx,UPPER(cIndex))
 	AADD(aTmpExp,UPPER(STRTRAN(aOrderCreateInfo[UR_ORCR_CKEY],"+",",")) )
-	AADD(aTmpFor,UPPER(STRTRAN(acondinfo[UR_ORC_CFOR],"."," ")) )//CLEAN THE DOT .AND. .OR.
+	AADD(aTmpFor,UPPER(STRTRAN(acondinfo[UR_ORC_CFOR],'"',"'")) )//CLEAN THE DOT .AND. .OR.
 	IF acondinfo[UR_ORC_NEXT] > 0
 	   AADD(aTmpUnique,UPPER(acondinfo[UR_ORC_NEXT] ))
+    ELSE
+	   AADD(aTmpUnique,"")
 	ENDIF
 	
     aOrderInfo [UR_ORI_BAG ] := cIndex
@@ -1210,10 +1363,14 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
 	AADD( aWAData[WA_INDEXES],UPPER(cIndex))
 	AADD( aWAData[WA_INDEXEXP],UPPER(STRTRAN(aOrderCreateInfo[UR_ORCR_CKEY],"+",",")))
 	IF !EMPTY(acondinfo[UR_ORC_CFOR])
-	   AADD( aWAData[WA_INDEXFOR]," WHERE "+UPPER(STRTRAN(acondinfo[UR_ORC_CFOR],"."," ")))
+	   AADD( aWAData[WA_INDEXFOR]," WHERE "+UPPER(STRTRAN(acondinfo[UR_ORC_CFOR],'"',"'")))
+    ELSE
+	   AADD( aWAData[WA_INDEXFOR],"")
 	ENDIF
 	IF acondinfo[UR_ORC_NEXT] > 0
        AADD( aWAData[WA_INDEXUNIQUE]," TOP "+UPPER(ALLTRIM(STR(acondinfo[UR_ORC_NEXT]))))
+	ELSE
+       AADD( aWAData[WA_INDEXUNIQUE],"")	
 	ENDIF
 	
    RETURN HB_SUCCESS
@@ -1227,7 +1384,7 @@ STATIC FUNCTION ADO_ORDDESTROY( nWA, aOrderInfo )
    IF n > 0
       ADEL( aWAData[ WA_INDEXES ], n, .T.)
 	  ADEL( aWAData[ WA_INDEXEXP ], n, .T.)
-	  ADEL( aWAData[ WA_INDEXEFOR ], n, .T.)
+	  ADEL( aWAData[ WA_INDEXFOR ], n, .T.)
 	  IF n = aWAData[ WA_INDEXACTIVE ]
 	     aWAData[ WA_INDEXACTIVE ] := 0
 	  ENDIF
@@ -1238,7 +1395,7 @@ STATIC FUNCTION ADO_ORDDESTROY( nWA, aOrderInfo )
 STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
    LOCAL aWAData := USRRDD_AREADATA( nWA )
-   LOCAL aSeek
+   LOCAL aSeek,cSql
    
    HB_SYMBOL_UNUSED( nWA )
    HB_SYMBOL_UNUSED( lSoftSeek )
@@ -1250,9 +1407,7 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
    ENDIF
    
    aSeek := ADOPseudoSeek(cKey,aWAData,lSoftSeek)
-IF ALIAS() == "APPTVERF"
-   MSGINFO(   aSeek[2])
-ENDIF   
+   
    IF aSeek[3] //no more than one field in the expression we can use find
    
       oRecordSet:MoveFirst()
@@ -1339,7 +1494,6 @@ FUNCTION ADORDD_GETFUNCTABLE( pFuncCount, pFuncTable, pSuperTable, nRddID )
    aADOFunc[ UR_SEEK ]         := (@ADO_SEEK())
    aADOFunc[ UR_EXISTS ]       := (@ADO_EXISTS())
    aADOFunc[ UR_DROP ]         := (@ADO_DROP())
-   
 
    RETURN USRRDD_GETFUNCTABLE( pFuncCount, pFuncTable, pSuperTable, nRddID, ;
       /* NO SUPER RDD */, aADOFunc )
@@ -1403,7 +1557,7 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 	CASE uInfoType == DBI_CHILDCOUNT // 22  /* Number of child relations set       */
 	
 	CASE uInfoType == DBI_FILEHANDLE // 23  /* The data file's OS file handle      */
-	     yUrETURN := -1
+	     uReturn := -1
 	CASE uInfoType == DBI_BOF // 26  /* Same as bof()    */
 	
 	     uReturn := aWAData[WA_BOF]
@@ -1437,33 +1591,36 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 	     uReturn := ALIAS()
 		 
 	CASE uInfoType == DBI_GETSCOPE // 34  /* The codeblock used in LOCATE        */
-	     uResult := ""
+	     uReturn := ""
 	CASE uInfoType == DBI_LOCKOFFSET //  35  /* The offset used for logical locking */
 	     uReturn := 0
 	CASE uInfoType == DBI_SHARED  //  36  /* Was the file opened shared?         */
-	     uResult := aWAData[WA_OPENSHARED]
+	     uReturn := aWAData[WA_OPENSHARED]
 	CASE uInfoType == DBI_MEMOEXT  //  37  /* The memo file's file extension      */
 	     uReturn := ""
 	CASE uInfoType == DBI_MEMOHANDLE // 38  /* File handle of the memo file        */
 	     uReturn := -1
 	CASE uInfoType == DBI_MEMOBLOCKSIZE  // 39  /* Memo File's block size              */
-         uresult := 0
+         uReturn := 0
 	CASE uInfoType == DBI_DB_VERSION  //  101  /* Version of the Host driver          */
-	     uResult := "Version 2015"
+	     uReturn := "Version 2015"
 	CASE uInfoType == DBI_RDD_VERSION // 102  /* current RDD's version               */
-	     uResult := "Version 2015"
+	     uReturn := "Version 2015"
        
   ENDCASE
   
  RETURN HB_SUCCESS //uReturn
  
-STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek)
+STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
  LOCAL nOrder := aWAData[WA_INDEXACTIVE]
  LOCAL cExpression := aWAData[WA_INDEXEXP][nOrder]
- LOCAL aLens := {}, n, aFields := {} , nAt := 1,cType, lNotFind := .F. ,cSqlExpression := ""
+ LOCAL aLens := {}, n, aFields := {} , nAt := 1,cType, lNotFind := .F. ,cSqlExpression := "",nLen
   
  DEFAULT lSoftSeek TO .F.//to use like insead of =
+ DEFAULT lBetween TO .F.
+ 
  cKey := CVALTOCHAR(cKey)
+ cKeyBotom := CVALTOCHAR(cKeybottom)
  
     FOR n := 1 to FCOUNT() // we have to check all fields in table because there isnt any conspicuous mark on the expression to guide us
 	    
@@ -1484,27 +1641,45 @@ STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek)
 	cSqlExpression := ""
 	
     FOR nAt := 1 TO LEN(aFields)
-	
+	   
 	    nLen := FIELDSIZE(FIELDPOS(aFields[nAt,1]))
 		cType := FIELDTYPE(FIELDPOS(aFields[nAt,1]))
 		
 		//extract from cKey the lengh og this field
 		IF cType = "C" .OR. cType = "M"  
 		   
-	       cExpression += aFields[nAt,1]+IF(lSoftSeek," LIKE ", "=")+"'"+SUBSTR( cKey, 1, nLen)+"'"
-		   cSqlExpression := cExpression
+		   IF !lBetween
+	          cExpression += aFields[nAt,1]+IF(lSoftSeek," LIKE ", "=")+"'"+SUBSTR( cKey, 1, nLen)+"'"
+		      cSqlExpression := cExpression
+		   ELSE
+	          cExpression += aFields[nAt,1]+" BETWEEN "+"'"+SUBSTR( cKey, 1, nLen)+"'"+;
+			                 " AND "+"'"+SUBSTR( cKeyBottom, 1, nLen)+"'"
+		      cSqlExpression := cExpression
+           ENDIF
 		   
 		ELSEIF cType = "D" .OR. cType = "N"
 		   
 		   IF cType = "D"
 		   
-		      cExpression    += aFields[nAt,1]+ "="+"'"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'" //delim might be #
-		      cSqlExpression += aFields[nAt,1]+ "='"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'"
+		      IF !lBetween
+		         cExpression    += aFields[nAt,1]+ "="+"'"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'" //delim might be #
+		         cSqlExpression += aFields[nAt,1]+ "='"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'"
+		      ELSE
+	             cExpression += aFields[nAt,1]+" BETWEEN "+"'"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'"+;
+			                 " AND "+"'"+ADODTOS(SUBSTR( cKeyBottom, 1, nLen))+"'"
+		         cSqlExpression := cExpression
+              ENDIF
 			  
 		   ELSE
 		   
-		      cExpression    += aFields[nAt,1]+ "="+"#"+SUBSTR( cKey, 1, nLen)+"#"
-		      cSqlExpression += aFields[nAt,1]+ "="+SUBSTR( cKey, 1, nLen)
+		      IF !lBetween
+		         cExpression    += aFields[nAt,1]+ "="+"#"+SUBSTR( cKey, 1, nLen)+"#"
+		         cSqlExpression += aFields[nAt,1]+ "="+SUBSTR( cKey, 1, nLen)
+		      ELSE
+	             cExpression += aFields[nAt,1]+" BETWEEN "+"#"+SUBSTR( cKey, 1, nLen)+"#"+;
+			                 " AND "+"#"+SUBSTR( cKeyBottom, 1, nLen)+"#"
+		         cSqlExpression := cExpression
+              ENDIF
 			  
 		   ENDIF	  
 		   
@@ -1515,6 +1690,7 @@ STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek)
 		ENDIF
 		
 		cKey := SUBSTR(cKey,nLen+1) // take out the len of the expression already used
+		cKeybottom := SUBSTR(cKeybottom,nLen+1) // take out the len of the expression already used
 		
 		IF nAt < LEN(aFields) //add AND last one isnt needed!
 		
@@ -1687,7 +1863,7 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
 STATIC FUNCTION ADODTOS(cDate)
  LOCAL dDate ,cYear,cMonth,cDay
 
-   IF "." IN cDate .OR. "-" IN cDate .OR. "/" IN cDate
+   IF AT( ".",cDate) > 0 .OR. AT("-" ,cDate) > 0 .OR. AT("/",cDate) > 0
       dDate := CTOD(cDate)  // hope to enforce set date format like this
    ELSE
       cYear  := SUBSTR(cDate,1,4)
@@ -2219,7 +2395,7 @@ LOCAL  Alista_fic:= { {"SECTOR",{"SECTOR","SECTORES"} },;
    {"NRCAL_F","NRCALCULO,CODIGOFORN,ANO ASC,SEMPREVCHE ASC"},;
    {"NRCAL_P","NRCALCULO,CODIGOPROD,ARMAZEM,ANO ASC,SEMPREVCHE ASC"},;
    {"FCONTRT","CODIGOPROD,NRCONTRATO"} },;
- {"ENCCLIST",{"ENCCPRO","NRENCOMEND,CODIGOPROD,ARMAZEM","WHERE CODCLIENTE = '0001      '"},;
+ {"ENCCLIST",{"ENCCPRO","NRENCOMEND,CODIGOPROD,ARMAZEM"},;
    {"PROENCC","CODIGOPROD,ARMAZEM,NRENCOMEND"},{"MECPD","GUIA,CODCLIENTE,CODIGOPROD,ARMAZEM"},;
    {"CDENCCL","CODCLIENTE"},{"PTFACT","NRFACTUR,CODCLIENTE,CODIGOPROD,ARMAZEM"},;
    {"NRFPROD","NRFACTUR,CODIGOPROD,ARMAZEM,ANO ASC,SEMENTREGA ASC"} ,;
@@ -2285,7 +2461,7 @@ FUNCTION ListTmpFor()
   RETURN aTmpFor
    
 FUNCTION ListTmpUnique()
-  LOCAL aTmpUniques := {}
+  STATIC aTmpUniques := {}
   RETURN aTmpUniques
    
  FUNCTION ListTmpNames()
