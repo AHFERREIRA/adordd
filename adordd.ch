@@ -198,6 +198,10 @@
 #define adEditAdd                       2 /*Indicates that the AddNew method has been called, and the current record in the copy buffer is a new record that has not been saved in the database.*/
 #define adEditDelete                    4 /* Indicates that the current record has been deleted.*/
 
+*/ Find modes */
+#define adSearchBackward               -1
+#define adSearchForward                 1
+
 #command USE <(db)> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;

@@ -1409,12 +1409,23 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
    aSeek := ADOPseudoSeek(cKey,aWAData,lSoftSeek)
    
    IF aSeek[3] //no more than one field in the expression we can use find
-   
-      oRecordSet:MoveFirst()
-      oRecordSet:Find( aSeek[1])
-	  
+      IF lSoftSeek 
+         oRecordSet:MoveLast()
+         oRecordSet:Find( aSeek[1],,adSearchBackward)
+		 IF !oRecordSet:Eof()
+		    oRecordSet:Move(1)
+		 ENDIF	
+	  ELSE
+	     IF lFindLast
+            oRecordSet:MoveLast()
+            oRecordSet:Find( aSeek[1])
+		 ELSE
+            oRecordSet:MoveFirst()
+            oRecordSet:Find( aSeek[1])
+		 ENDIF	
+	  ENDIF
    ELSE
-
+       //attention multiple fields in cseek expression cannot emulate behaviour of lSoftSeek 
 	  //more than one field in te seek expression has to be select
 	  oRecordSet:Close()
       cSql := IndexBuildExp(aWAData[WA_INDEXACTIVE],aWAData,.F.,aSeek[2])
@@ -1424,6 +1435,7 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
 	  IF lFindLast
 	     oRecordSet:MoveLast()
 	  ENDIF
+	  
    ENDIF	  
    
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
@@ -1690,7 +1702,9 @@ STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
 		ENDIF
 		
 		cKey := SUBSTR(cKey,nLen+1) // take out the len of the expression already used
-		cKeybottom := SUBSTR(cKeybottom,nLen+1) // take out the len of the expression already used
+		IF LBetween
+		   cKeybottom := SUBSTR(cKeybottom,nLen+1) // take out the len of the expression already used
+		ENDIF
 		
 		IF nAt < LEN(aFields) //add AND last one isnt needed!
 		
