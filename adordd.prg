@@ -177,8 +177,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL cName, aField, oError, nResult
    LOCAL oRecordSet, nTotalFields, n
-   LOCAL nCountIndexes // see below
-   
+      
    /* When there is no ALIAS we will create new one using file name */
    IF Empty( aOpenInfo[ UR_OI_ALIAS ] )
       hb_FNameSplit( aOpenInfo[ UR_OI_NAME ],, @cName )
@@ -317,7 +316,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
    IF aWAData[ WA_QUERY ] == "SELECT * FROM "
       oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
-	  //this should allow prop index and seek  adCmdTableDirect
+	  //to allow prop index and seek  adCmdTableDirect ?
    ELSE
       oRecordSet:Open( aWAData[ WA_QUERY ], aWAData[ WA_CONNECTION ],,,adCmdTableDirect )
    ENDIF
@@ -344,7 +343,19 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    IF nResult == HB_SUCCESS
       ADO_GOTOP( nWA )
    ENDIF
-
+   
+   //OPEN EXCLUSIVE MUST BE WITHIN A TRANSACTION!
+   IF !aWAData[ WA_OPENSHARED ] 
+   
+       IF aWAData[ WA_CONNECTION ]:BeginTrans() > 1  //THERE IS ANOTHER TOP LEVEL TRANSACTION OPEN EXCLUSIVE
+	   
+  	      nResult := HB_SUCCESS 
+		  aWAData[ WA_CONNECTION ]:RollbackTrans() // CLOSE TRANSACT THERE IS NOTHING TO rollback only to cncel it
+	   
+	   ENDIF
+	   
+   ENDIF	   
+   
    RETURN nResult
 
 FUNCTION ADODB_CLOSE()
@@ -478,6 +489,7 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
    IF ADORECCOUNT(nWa,rs) <> 0 // AHF SEE FUNCTION FOR EXPLANATION rs:RecordCount <> 0
       rs:MoveFirst()
       rs:Move( nRecord - 1, 0 )
+	  //rs:bookmark := nRecord
    ENDIF
    ADO_RECID( nWA, @nRecNo )
 
@@ -528,18 +540,14 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
    LOCAL nResult := HB_SUCCESS
 
-   IF ! Empty( aWAData[ WA_PENDINGREL ] )
-      IF ADO_FORCEREL( nWA ) != HB_SUCCESS
-         RETURN HB_FAILURE
-      ENDIF
-   ENDIF
    IF ADORECCOUNT(nWa,oRecordSet) = 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount = 0
       RETURN HB_FAILURE
    ENDIF
+   
    IF nToSkip != 0
       IF aWAData[ WA_EOF ]
          IF nToSkip > 0
-            RETURN HB_SUCCESS
+            RETURN HB_SUCCESS //SHOULDNET BE FAILURE?
          ENDIF
          ADO_GOBOTTOM( nWA )
          ++nToSkip
@@ -550,7 +558,7 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
                oRecordSet:MoveFirst()
                aWAData[ WA_BOF ] := .T.
                aWAData[ WA_EOF ] := oRecordSet:EOF
-            ELSE //IF nToSkip != 0
+            ELSE 
 			   IF ADORECCOUNT(nWa,oRecordSet) <> 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount <> 0
                   oRecordSet:Move( nToSkip )
                   aWAData[ WA_BOF ] := .F.
@@ -559,6 +567,12 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
                   aWAData[ WA_BOF ] := oRecordSet:BOF
                   aWAData[ WA_EOF ] := oRecordSet:EOF
                ENDIF			   
+            ENDIF
+            //ENFORCE RELATIONS SHOULD BE BELOW AFTER MOVING TO NEXT RECORD
+            IF ! Empty( aWAData[ WA_PENDINGREL ] )
+               IF ADO_FORCEREL( nWA ) != HB_SUCCESS
+                  BREAK
+               ENDIF
             ENDIF
          ELSE
             nResult := HB_FAILURE
@@ -664,7 +678,7 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 		 oRs:CursorType := adOpenForwardOnly
 		 oRs:LockType := adLockReadOnly
 		 //LAST PARAMTER INSERTS cSql COUNT(*) MUST BE ALL FIELDS BECAUSE IF THERE IS A NULL FIELD COUNTS RETURNS WRONG
-		 cSql := IndexBuildExp(aAWData[WA_INDEXACTIVE],aAWData,.T.) 
+		 cSql := IndexBuildExp(nWA,aAWData[WA_INDEXACTIVE],aAWData,.T.) 
 		 //LETS COUNT IT
 		 oRs:open(cSql,oCon)
 		 nCount := oRs:Fields( 0 ):Value
@@ -706,17 +720,6 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 	    ADO_UNLOCK(nWA)
 	ENDIF	
     AADD(aWdata[ WA_LOCKLIST ],oRecordSet:BookMark)
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_FLUSH( nWA )
-
-   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-
-   TRY
-      oRecordSet:Update()
-   CATCH
-   END
 
    RETURN HB_SUCCESS
 
@@ -852,13 +855,13 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
    CASE nIndex == DBOI_SCOPESET .OR. nIndex == DBOI_SCOPEBOTTOM .OR. nIndex == DBOI_SCOPEBOTTOMCLEAR ;
 	    .OR. nIndex == DBOI_SCOPECLEAR .OR. nIndex == DBOI_SCOPETOP .OR. nIndex == DBOI_SCOPETOPCLEAR
 
-	    aOrderInfo[ UR_ORI_RESULT ] := ADOSCOPE( AWAData,oRecordset, aOrderInfo,nIndex)
+	    aOrderInfo[ UR_ORI_RESULT ] := ADOSCOPE(nWA, AWAData,oRecordset, aOrderInfo,nIndex)
 	 
    ENDCASE
    
    RETURN nResult
    
-STATIC FUNCTION ADOSCOPE(aWAdata, oRecordSet, aOrderInfo,nIndex)
+STATIC FUNCTION ADOSCOPE(nWA,aWAdata, oRecordSet, aOrderInfo,nIndex)
  LOCAL y, cScopeExp :="", cSql :=""
 
    //[UR_ORI_NEWVAL] comes with actual scope top or bottom and returns the former active scope if any
@@ -958,7 +961,7 @@ STATIC FUNCTION ADOSCOPE(aWAdata, oRecordSet, aOrderInfo,nIndex)
 	  
 	  IF y <= LEN(aWAData[ WA_SCOPES ])  //EXIST SCOPE ARRAY ALREADY
          IF LEN(ALLTRIM(aWAData[ WA_SCOPETOP ][y]+aWAData[ WA_SCOPEBOT ][y])) > 0
-            cScopeEXp := ADOPSEUDOSEEK(aWAData[ WA_SCOPETOP ][y],aWAData,,.T.,aWAData[ WA_SCOPEBOT ][y])[2]
+            cScopeEXp := ADOPSEUDOSEEK(nWA,aWAData[ WA_SCOPETOP ][y],aWAData,,.T.,aWAData[ WA_SCOPEBOT ][y])[2]
 	    ELSE
 	       cScopeExp :=""
         ENDIF	  
@@ -966,7 +969,7 @@ STATIC FUNCTION ADOSCOPE(aWAdata, oRecordSet, aOrderInfo,nIndex)
 	    cScopeExp :=""
 	 ENDIF
 	 
-      cSql := IndexBuildExp(aWAData[ WA_INDEXACTIVE ],aWAData,,cScopeExp)
+      cSql := IndexBuildExp(nWA,aWAData[ WA_INDEXACTIVE ],aWAData,,cScopeExp)
 	  oRecordSet:Close()
 	  oRecordSet:open(cSql,aWAData[ WA_CONNECTION ])
 	  
@@ -1072,7 +1075,6 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 
    IF !EMPTY(aOrderInfo[ UR_ORI_TAG ])
    
-      //ADO_RECID( nWA, @nRecNo )
       oRecordSet:Close()
 	  /* AHF NOT NEEDED ONLY IF YOU WANT TO CHANGE IT OTHERWISE STAYS AS IT WAS WHEN OPENING IT
       oRecordSet:CursorType := adOpenDynamic
@@ -1088,7 +1090,7 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
       IF n = 0
          oRecordSet:Open( aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
       ELSE
-	     cSql := IndexBuildExp(n,aWAData)
+	     cSql := IndexBuildExp(nWA,n,aWAData)
 		 oRecordSet:Open( cSql,aWAData[ WA_CONNECTION ])
       ENDIF
       ADO_GOTOP( nWA )
@@ -1104,14 +1106,14 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 
    RETURN HB_SUCCESS
 
-STATIC FUNCTION IndexBuildExp(nIndex,aWAData,lCountRec,myCfor)  //notgroup for adoreccount
+STATIC FUNCTION IndexBuildExp(nWA,nIndex,aWAData,lCountRec,myCfor)  //notgroup for adoreccount
    LOCAL cSql := "", cOrder:="", cUnique:="", cFor:=""
    
      DEFAULT lCountRec TO .F.
 	 DEFAULT myCfor TO "" //when it comes ex from ado_seek to add to where clause 
 	 
 	 IF !lCountRec
-	    cOrder := ORDKEY(nIndex)
+	    cOrder := (nWA)->(ORDKEY(nIndex))
 	    cOrder := " ORDER BY "+cOrder
 	 ENDIF
 	 
@@ -1153,7 +1155,7 @@ STATIC FUNCTION ADO_RAWLOCK( nWA, nAction, nRecNo )
 
 STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 
-   LOCAL aWdata := USRRDD_AREADATA( nWA ),B,AA:= {}
+   LOCAL aWdata := USRRDD_AREADATA( nWA ),n
    
    HB_SYMBOL_UNUSED( nWA )
    
@@ -1177,8 +1179,11 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
       AADD(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ])
 	ENDIF  
    
+    ADOBEGINTRANS(nWa)	//START TRANSACTION
+	
    RETURN HB_SUCCESS
 
+   
 STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
 
    LOCAL aWdata := USRRDD_AREADATA( nWA ),n
@@ -1197,6 +1202,68 @@ STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
    ENDIF   
    
    RETURN HB_SUCCESS
+
+   
+STATIC FUNCTION ADO_FLUSH( nWA )
+
+   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+   LOCAL n
+   
+   TRY
+   
+      oRecordSet:Update()
+	  
+	  ADOCOMMITTRANS(nWa) //COMMIT TRANSACTION
+	  
+   CATCH
+   
+      ADOROLLBACKTRANS(nWa) //ROLL IT BACK
+	  
+   END
+
+   RETURN HB_SUCCESS
+   
+
+FUNCTION ADOBEGINTRANS(nWa) // narea or calias
+
+ LOCAL oCon := hb_adoRddGetConnection( nWA )
+ 
+  IF oCon:BeginTrans() > 1 //WE ARE AREADY IN A TRANSACT
+     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
+  ENDIF
+  
+RETURN .T.
+
+FUNCTION ADOCOMMITTRANS(nWa) // narea or calias
+
+ LOCAL oCon := hb_adoRddGetConnection( nWA ), n
+ 
+  n := oCon:BeginTrans() 
+  
+  IF n > 1  //WE ARE AREADY IN ATRANSACT
+     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
+  ENDIF
+  IF n > 1 // THERE IS A ACTIVE TRANSACTION IF IT WAS 1 WE WERE NOW OPENING A TRANACT
+     oCon:CommitTrans()
+  ENDIF
+  
+RETURN .T.
+
+FUNCTION ADOROLLBACKTRANS(nWa) // narea or calias
+
+ LOCAL oCon := hb_adoRddGetConnection( nWA ), n
+ 
+  n := oCon:BeginTrans() 
+  
+  IF n > 1  //WE ARE AREADY IN ATRANSACT
+     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
+  ENDIF
+  IF n > 1 // THERE IS A ACTIVE TRANSACTION IF IT WAS 1 WE WERE NOW OPENING A TRANACT
+     oCon:RollbackTrans()
+  ENDIF
+
+RETURN .T.
+
 
 STATIC FUNCTION ADO_SETLOCATE( nWA, aScopeInfo )
 
@@ -1406,7 +1473,7 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
       RETURN HB_FAILURE
    ENDIF
    
-   aSeek := ADOPseudoSeek(cKey,aWAData,lSoftSeek)
+   aSeek := ADOPseudoSeek(nWA,cKey,aWAData,lSoftSeek)
    
    IF aSeek[3] //no more than one field in the expression we can use find
       IF lSoftSeek 
@@ -1428,10 +1495,9 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
        //attention multiple fields in cseek expression cannot emulate behaviour of lSoftSeek 
 	  //more than one field in te seek expression has to be select
 	  oRecordSet:Close()
-      cSql := IndexBuildExp(aWAData[WA_INDEXACTIVE],aWAData,.F.,aSeek[2])
-	  cSql := STRTRAN(cSql,"  "," ") //take extra spaces
-	  
+      cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData,.F.,aSeek[2])
       oRecordSet:Open( cSql,aWAData[ WA_CONNECTION ] )
+
 	  IF lFindLast
 	     oRecordSet:MoveLast()
 	  ENDIF
@@ -1530,6 +1596,9 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 	     uReturn := .T.
 		 
 	CASE uInfoType == DBI_GETHEADERSIZE // 3  /* Data file's header size     */
+	
+	     uReturn := 0
+		 
 	CASE uInfoType == DBI_LASTUPDATE  // 4  /* The last date this file was written to  */
 	
 	     //SELECT QUERY DEPENDING OF THE DATABASE file INI with
@@ -1537,6 +1606,7 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 		 // ConnString = "connection string"
 		 // DBI_LASTUPDATE = "select query to te db" 
 		 MsgInfo("Not ready yet Please consult ADORDD ADO_INFO FOR MORE INFO")
+		 uReturn := CTOD("01/01/89")
 		 
 	CASE uInfoType == DBI_GETDELIMITER // 5  /* The delimiter (as a string)         */
 	     uReturn := ""
@@ -1544,12 +1614,8 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 	     uReturn := ""
 	CASE uInfoType == DBI_GETRECSIZE // 7  /* The size of 1 record in the file    */
 
-         //SELECT QUERY DEPENDING OF THE DATABASE file INI with
-		 // [SQL NAME]
-		 // ConnString = "connection string"
-		 // DBI_LASTUPDATE = "select query to te db" 
-		 MsgInfo("Not ready yet Please consult ADORDD ADO_INFO FOR MORE INFO")
-	
+	     ADO_RECINFO( nWA, ADO_RECID( nWA, @uReturn ), UR_DBRI_RECSIZE, @uReturn )
+		 
 	CASE uInfoType == DBI_GETLOCKARRAY // 8  /* An array of locked records' numbers */
 
          uReturn := aWAData[WA_LOCKLIST]
@@ -1557,10 +1623,15 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 	CASE uInfoType == DBI_TABLEEXT //  9  /* The data file's file extension      */
 	
 		 MSGINFO("IN SQL TABLE EXTENSION DO NOT MATTER!")
+		 uReturn := NIL
 		 
 	CASE uInfoType == DBI_FULLPATH // 10  /* The Full path to the data file      */
 	
-         MSGINFO("IN SQL FULL PATH DOES NOT MATTER!")
+		 IF FILE(SET(_SET_DEFAULT)+"\"+CFILENOPATH(aWAData[WA_TABLENAME]))
+            uReturn := SET(_SET_DEFAULT)
+		 ELSE
+		    uReturn := CFILENOPATH(aWAData[WA_TABLENAME])
+         ENDIF		 
 		 
 	CASE uInfoType == DBI_ISFLOCK // 20  /* Is there a file lock active?        */
 	
@@ -1568,6 +1639,8 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 		 
 	CASE uInfoType == DBI_CHILDCOUNT // 22  /* Number of child relations set       */
 	
+	     uReturn := 0
+		 
 	CASE uInfoType == DBI_FILEHANDLE // 23  /* The data file's OS file handle      */
 	     uReturn := -1
 	CASE uInfoType == DBI_BOF // 26  /* Same as bof()    */
@@ -1584,8 +1657,12 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 		 
 	CASE uInfoType == DBI_FOUND // 29  /* Same as found()  */
 	
+	     uReturn := aWAData[WA_FOUND]
+		 
 	CASE uInfoType == DBI_FCOUNT // 30  /* How many fields in a record?        */
 	
+	     uReturn := FCOUNT()
+		 
 	CASE uInfoType == DBI_LOCKCOUNT // 31  /* Number of record locks              */
 	
 	     uReturn := LEN(aWAData[WA_LOCKLIST])
@@ -1623,7 +1700,7 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
   
  RETURN HB_SUCCESS //uReturn
  
-STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
+STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
  LOCAL nOrder := aWAData[WA_INDEXACTIVE]
  LOCAL cExpression := aWAData[WA_INDEXEXP][nOrder]
  LOCAL aLens := {}, n, aFields := {} , nAt := 1,cType, lNotFind := .F. ,cSqlExpression := "",nLen
@@ -1634,13 +1711,13 @@ STATIC FUNCTION ADOPSEUDOSEEK(cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
  cKey := CVALTOCHAR(cKey)
  cKeyBotom := CVALTOCHAR(cKeybottom)
  
-    FOR n := 1 to FCOUNT() // we have to check all fields in table because there isnt any conspicuous mark on the expression to guide us
+    FOR n := 1 to (nWA)->(FCOUNT()) // we have to check all fields in table because there isnt any conspicuous mark on the expression to guide us
 	    
-	    nAt := AT(FIELDNAME(n),cExpression)
+	    nAt := AT((nWA)->(FIELDNAME(n)),cExpression)
 		
 	    IF nAt > 0
 
-   		   AADD(aFields ,{FIELDNAME(n),nAt}) //nAt order of the field in the expression
+   		   AADD(aFields ,{(nWA)->(FIELDNAME(n)),nAt}) //nAt order of the field in the expression
 		   
 	   ENDIF 
 	   
@@ -1889,37 +1966,61 @@ STATIC FUNCTION ADODTOS(cDate)
    RETURN DTOC(dDate)
    
    
-
-/*                               ADO  FUNCTIONS WORK NOT STARTED YET */
-
 STATIC FUNCTION ADO_RECINFO( nWA, nRecord, nInfoType, uInfo )
 
    LOCAL nResult := HB_SUCCESS
-
-// LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-
+   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+   LOCAL n
+   
    HB_SYMBOL_UNUSED( nWA )
 
 #ifdef UR_DBRI_DELETED
    DO CASE
    CASE nInfoType == UR_DBRI_DELETED
-      uInfo := .F.
+   
+      ADO_DELETED( nWA, @uInfo )
+		
    CASE nInfoType == UR_DBRI_LOCKED
-      uInfo := .T.
-   CASE nInfoType == UR_DBRI_RECSIZE
+   
+      FOR n:= 1 TO LEN(aWdata[ WA_LOCKLIST ])
+		  IF nRecord = aWdata[ WA_LOCKLIST ][n]
+             uInfo := .T.
+			 EXIT
+		  ENDIF
+      NEXT			
+		
+   CASE nInfoType == UR_DBRI_RECSIZE 
+   
+      uInfo := 0
+      FOR n := 1 TO FCOUNT()
+		  uInfo += FIELDSIZE(n)
+	  NEXT
+		
    CASE nInfoType == UR_DBRI_RECNO
-      nResult := ADO_RECID( nWA, @nRecord )
+   
+      nResult := ADO_RECID( nWA, @uInfo )
+	  
    CASE nInfoType == UR_DBRI_UPDATED
+   
       uInfo := .F.
+	  
    CASE nInfoType == UR_DBRI_ENCRYPTED
+   
       uInfo := .F.
+	  
    CASE nInfoType == UR_DBRI_RAWRECORD
+   
       uInfo := ""
+	  
    CASE nInfoType == UR_DBRI_RAWMEMOS
+   
       uInfo := ""
+	  
    CASE nInfoType == UR_DBRI_RAWDATA
+   
       nResult := ADO_GOTO( nWA, nRecord )
       uInfo := ""
+	  
    ENDCASE
 #else
    HB_SYMBOL_UNUSED( nRecord )
@@ -1928,6 +2029,81 @@ STATIC FUNCTION ADO_RECINFO( nWA, nRecord, nInfoType, uInfo )
 #endif
 
    RETURN nResult
+   
+STATIC FUNCTION ADO_SETREL( nWA, aRelInfo )
+
+   LOCAL aWAData := USRRDD_AREADATA( nWA ),n 
+  
+   IF VALTYPE(   aWAData[ WA_PENDINGREL ]) = "U"
+       aWAData[ WA_PENDINGREL ] := {}
+   ENDIF	   
+   
+   FOR n:= 1 TO LEN(aRelInfo)
+      AADD(aWAData[ WA_PENDINGREL ] ,aRelInfo[n])
+   NEXT
+   
+   RETURN HB_SUCCESS
+
+   
+STATIC FUNCTION ADO_FORCEREL( nWA )
+
+   LOCAL aWAData := USRRDD_AREADATA( nWA )
+   LOCAL n,aPendingRel:=ARRAY(UR_RI_SIZE),nReturn := HB_SUCCESS
+   
+   IF !EMPTY(aWAData[ WA_PENDINGREL ])
+   
+      FOR n:= 1 TO LEN(aWAData[ WA_PENDINGREL ]) STEP UR_RI_SIZE //next elements next relations
+       
+	      ACOPY(aWAData[ WA_PENDINGREL ], aPendingRel, n, UR_RI_SIZE)
+          nReturn := ADO_RELEVAL( nWA, aPendingRel )
+	   
+      NEXT
+	  
+   ENDIF
+   
+   RETURN nReturn
+   
+
+STATIC FUNCTION ADO_RELEVAL( nWA, aRelInfo )
+
+   LOCAL aInfo, nReturn, nOrder, uResult
+
+   
+   nReturn := ADO_EVALBLOCK( aRelInfo[ UR_RI_PARENT ], aRelInfo[ UR_RI_BEXPR ], @uResult )
+
+   IF nReturn == HB_SUCCESS
+      /*
+       *  Check the current order
+       */
+      aInfo := Array( UR_ORI_SIZE )
+      nReturn := ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_NUMBER, @aInfo )
+	  
+      IF nReturn == HB_SUCCESS
+	  
+         nOrder := aInfo[ UR_ORI_RESULT ]
+		 
+         IF nOrder != 0
+            IF aRelInfo[ UR_RI_SCOPED ]
+               aInfo[ UR_ORI_NEWVAL ] := uResult
+               nReturn := ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPETOP, @aInfo )
+               IF nReturn == HB_SUCCESS
+                  nReturn := ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPEBOTTOM, @aInfo )
+               ENDIF
+            ENDIF
+            IF nReturn == HB_SUCCESS
+               //doesnt matter nreturn can be eof or bof sotory continunes
+			   ADO_SEEK( aRelInfo[ UR_RI_CHILD ], .F., uResult, .F. )
+            ENDIF
+			
+         ELSE
+		    MSGINFO("Relations in ADO SQL with record number are not alloud! See adordd.prg")
+            nReturn := ADO_GOTO( aRelInfo[ UR_RI_CHILD ], uResult )
+         ENDIF
+		 
+      ENDIF
+   ENDIF
+
+   RETURN nReturn
 
 STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
 
@@ -1947,6 +2123,90 @@ STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
    ENDIF
 
    RETURN HB_SUCCESS
+
+STATIC FUNCTION ADO_CLEARREL( nWA )
+
+   LOCAL aWAData := USRRDD_AREADATA( nWA )
+   
+   aWAData[ WA_PENDINGREL ] := NIL
+  
+   RETURN HB_SUCCESS
+   
+
+STATIC FUNCTION ADO_RELAREA( nWA, nRelNo, nRelArea )
+
+   LOCAL aWAData := USRRDD_AREADATA( nWA ),nPos
+   
+   nPos := nRelNo*UR_RI_SIZE-UR_RI_SIZE+UR_RI_CHILD
+   
+   IF !EMPTY(aWAData[ WA_PENDINGREL ])
+   
+       IF LEN(aWAData[ WA_PENDINGREL ]) >= nRelNo*UR_RI_SIZE
+
+		  nRelArea := aWAData[ WA_PENDINGREL ][nPos]
+		  
+	   ELSE
+	   
+          nRelArea := 0	   
+		   
+       ENDIF		 
+	  
+   ELSE
+
+      nRelArea := 0
+     
+   ENDIF
+  
+   
+   RETURN HB_SUCCESS
+   
+
+STATIC FUNCTION ADO_RELTEXT( nWA, nRelNo, cExpr )
+
+   LOCAL aWAData := USRRDD_AREADATA( nWA ),nPos
+   
+   nPos := nRelNo*UR_RI_SIZE-UR_RI_SIZE+UR_RI_CEXPR
+   
+   IF !EMPTY(aWAData[ WA_PENDINGREL ])
+   
+       IF LEN(aWAData[ WA_PENDINGREL ]) >= nRelNo*UR_RI_SIZE
+
+		  cExpr := aWAData[ WA_PENDINGREL ][nPos]
+	   ELSE
+	   
+          cExpr := 0	   
+		   
+       ENDIF		 
+	  
+   ELSE
+
+      cExpr := 0
+     
+   ENDIF
+
+   RETURN HB_SUCCESS
+  
+/*                               ADO  FUNCTIONS WORK NOT STARTED YET */
+
+STATIC FUNCTION ADO_SETFILTER( nWA, aFilterInfo )
+
+   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+
+   oRecordSet:Filter := SQLTranslate( aFilterInfo[ UR_FRI_CEXPR ] )
+
+   RETURN HB_SUCCESS
+
+STATIC FUNCTION ADO_CLEARFILTER( nWA )
+
+   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+
+   TRY
+      oRecordSet:Filter := ""
+   CATCH
+   END
+
+   RETURN HB_SUCCESS
+
 
 STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
 
@@ -1998,136 +2258,6 @@ STATIC FUNCTION ADO_DROP( nRdd, cTable, cIndex, ulConnect )
 
    RETURN lRet
 
-STATIC FUNCTION ADO_CLEARREL( nWA )
-
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-   LOCAL nKeys := 0, cKeyName
-
-   TRY
-      nKeys := aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys:Count
-   CATCH
-   END
-
-   IF nKeys > 0
-      cKeyName := aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys( nKeys - 1 ):Name
-      IF !( Upper( cKeyName ) == "PRIMARYKEY" )
-         aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys:Delete( cKeyName )
-      ENDIF
-   ENDIF
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_RELAREA( nWA, nRelNo, nRelArea )
-
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-
-   TRY
-      IF nRelNo <= aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys:Count()
-         nRelArea := Select( aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys( nRelNo - 1 ):RelatedTable )
-      ENDIF
-   CATCH
-      nRelArea := 0
-   END
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_RELTEXT( nWA, nRelNo, cExpr )
-
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-
-   TRY
-      IF nRelNo <= aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys:Count()
-         cExpr := aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys( nRelNo - 1 ):Columns( 0 ):RelatedColumn
-      ENDIF
-   CATCH
-      cExpr := ""
-   END
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_SETREL( nWA, aRelInfo )
-
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-   LOCAL cParent := Alias( aRelInfo[ UR_RI_PARENT ] )
-   LOCAL cChild := Alias( aRelInfo[ UR_RI_CHILD ] )
-   LOCAL cKeyName := cParent + "_" + cChild
-
-   TRY
-      aWAData[ WA_CATALOG ]:Tables( aWAData[ WA_TABLENAME ] ):Keys:Append( cKeyName, adKeyForeign, ;
-         aRelInfo[ UR_RI_CEXPR ], cChild, aRelInfo[ UR_RI_CEXPR ] )
-   CATCH
-      /* raise error for can't create relation */
-   END
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_FORCEREL( nWA )
-
-   LOCAL aPendingRel
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-
-   IF ! Empty( aWAData[ WA_PENDINGREL ] )
-
-      aPendingRel := aWAData[ WA_PENDINGREL ]
-      aWAData[ WA_PENDINGREL ] := NIL
-
-      RETURN ADO_RELEVAL( nWA, aPendingRel )
-   ENDIF
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_RELEVAL( nWA, aRelInfo )
-
-   LOCAL aInfo, nReturn, nOrder, uResult
-
-   nReturn := ADO_EVALBLOCK( aRelInfo[ UR_RI_PARENT ], aRelInfo[ UR_RI_BEXPR ], @uResult )
-
-   IF nReturn == HB_SUCCESS
-      /*
-       *  Check the current order
-       */
-      aInfo := Array( UR_ORI_SIZE )
-      nReturn := ADO_ORDINFO( nWA, DBOI_NUMBER, @aInfo )
-
-      IF nReturn == HB_SUCCESS
-         nOrder := aInfo[ UR_ORI_RESULT ]
-         IF nOrder != 0
-            IF aRelInfo[ UR_RI_SCOPED ]
-               aInfo[ UR_ORI_NEWVAL ] := uResult
-               nReturn := ADO_ORDINFO( nWA, DBOI_SCOPETOP, @aInfo )
-               IF nReturn == HB_SUCCESS
-                  nReturn := ADO_ORDINFO( nWA, DBOI_SCOPEBOTTOM, @aInfo )
-               ENDIF
-            ENDIF
-            IF nReturn == HB_SUCCESS
-               nReturn := ADO_SEEK( nWA, .F., uResult, .F. )
-            ENDIF
-         ELSE
-            nReturn := ADO_GOTO( nWA, uResult )
-         ENDIF
-      ENDIF
-   ENDIF
-
-   RETURN nReturn
-
-STATIC FUNCTION ADO_SETFILTER( nWA, aFilterInfo )
-
-   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-
-   oRecordSet:Filter := SQLTranslate( aFilterInfo[ UR_FRI_CEXPR ] )
-
-   RETURN HB_SUCCESS
-
-STATIC FUNCTION ADO_CLEARFILTER( nWA )
-
-   LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-
-   TRY
-      oRecordSet:Filter := ""
-   CATCH
-   END
-
-   RETURN HB_SUCCESS
 
 STATIC FUNCTION ADO_ZAP( nWA )
 
