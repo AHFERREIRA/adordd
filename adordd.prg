@@ -80,6 +80,17 @@
  * If you do not wish that, delete this exception notice.
  *
  */
+#ifndef __XHARBOUR__
+
+   #include "fivewin.ch"        // as Harbour does not have TRY / CATCH
+   #define UR_FI_FLAGS           6
+   #define UR_FI_STEP            7
+   #define UR_FI_SIZE            5 // by Lucas for Harbour
+
+
+#endif
+
+ANNOUNCE ADORDD  
 
 #include "rddsys.ch"
 #include "fileio.ch"
@@ -119,7 +130,8 @@
 #define WA_SCOPES      26//AHF
 #define WA_SCOPETOP    27//AHF
 #define WA_SCOPEBOT    28//AHF
-#define WA_SIZE        28
+#define WA_ISITSUBSET  29//AHF
+#define WA_SIZE        29
 
 #define RDD_CONNECTION 1
 #define RDD_CATALOG    2
@@ -167,6 +179,7 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_SCOPES] := {}
    aWAData[WA_SCOPETOP] := {}
    aWAData[WA_SCOPEBOT] := {}
+   aWAData[WA_ISITSUBSET] := .F.
    
    USRRDD_AREADATA( nWA, aWAData )
 
@@ -311,6 +324,8 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    oRecordSet:CursorType := adOpenDynamic
    oRecordSet:CursorLocation := adUseServer  // adUseClient its slower but has avntages such always bookmaks 
    oRecordSet:LockType := adLockPessimistic
+   //oRecordSet:MaxRecords := 100 ?
+   //oRecordSet:CacheSize := 50 //records increase performance set zero returns error set great server parameters max open rows error
 
    aWAData[ WA_TABLENAME ] := SUBSTR(CFILENOPATH(aWAData[ WA_TABLENAME ] ),1,LEN(CFILENOPATH(aWAData[ WA_TABLENAME ] ))-4)
 
@@ -333,8 +348,12 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       aField[ UR_FI_TYPEEXT ] := 0
   	  aField[ UR_FI_LEN ]     := ADO_FIELDSTRUCT( oRecordSet, n-1 )[3]
 	  aField[ UR_FI_DEC ]     := ADO_FIELDSTRUCT( oRecordSet, n-1 )[4]
+	  
+#ifdef __XHARBOUR__	  
       aField[ UR_FI_FLAGS ] := 0  // xHarbour expecs this field 
       aField[ UR_FI_STEP ] := 0 // xHarbour expecs this field
+#endif
+	  
       UR_SUPER_ADDFIELD( nWA, aField )
    NEXT
 
@@ -610,7 +629,6 @@ STATIC FUNCTION ADO_EOF( nWA, lEof )
 STATIC FUNCTION ADO_DELETED( nWA, lDeleted )
 
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-
    TRY
       IF oRecordSet:Status == adRecDeleted
          lDeleted := .T.
@@ -714,7 +732,11 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    HB_SYMBOL_UNUSED( lUnLockAll )
 
     oRecordSet:AddNew()
+	
+	TRY
     oRecordSet:Update()
+	CATCH
+	END
 	
     IF !lUnlockAll
 	    ADO_UNLOCK(nWA)
@@ -746,6 +768,10 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := ""
         ENDIF
+		//STRIPPING OUT INVALID EXPRESSION FOR DBFI NDEX EXPRESSION
+		aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ] , ",","+")
+		aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ] , "ASC","")
+		aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ] , "DESC","")
 		
    CASE nIndex == DBOI_CONDITION	
    
@@ -755,6 +781,8 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
 		ELSE
           aOrderInfo[ UR_ORI_RESULT ] :=""
 		ENDIF
+		//STRIPPING OUT INVALID EXPRESSION FOR DBF INDEX FOR EXPRESSION
+		aOrderInfo[ UR_ORI_RESULT ] := STRTRAN(aOrderInfo[ UR_ORI_RESULT ] , "WHERE","FOR")
 		
    CASE nIndex == DBOI_NAME
    
@@ -1095,12 +1123,12 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
       ENDIF
       ADO_GOTOP( nWA )
       //ADO_GOTO( nWA, nRecNo )
-	  
+	  aWAData[WA_ISITSUBSET] := .F.
       aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]]
 	  aWAData[ WA_INDEXACTIVE ] := n
 
 	ELSE
-	   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXACTIVE ]
+	   aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]]
 	ENDIF  
 	
 
@@ -1375,7 +1403,8 @@ STATIC FUNCTION ADO_ORDLSTCLEAR( nWA )
    aWAData[WA_SCOPES] := {}
    aWAData[WA_SCOPETOP] := {}
    aWAData[WA_SCOPEBOT] := {}
-
+   aWAData[WA_ISITSUBSET] := .F.
+   
    ADO_RECID( nWA, @nRecNo )
    oRecordSet:Close()
    /* AHF NOT NEEDED ONLY IF YOU WANT TO CHANGE IT OTHERWISE STAYS AS IT WAS WHEN OPENING IT
@@ -1473,6 +1502,11 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
       RETURN HB_FAILURE
    ENDIF
    
+   //this tell us if we are in a subset of records from previous seek
+   IF aWAData[WA_ISITSUBSET]
+      // ISNT WORKING STILL ADO_ORDLSTFOCUS(nWa,aWAData[INDEXACTIVE])
+   ENDIF
+   
    aSeek := ADOPseudoSeek(nWA,cKey,aWAData,lSoftSeek)
    
    IF aSeek[3] //no more than one field in the expression we can use find
@@ -1501,6 +1535,8 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
 	  IF lFindLast
 	     oRecordSet:MoveLast()
 	  ENDIF
+	  //TO CHECK NEXT CALLS IF WE ARE IN A SUBSSET TO REVERT TO DEFAULT SET
+	  aWAData[WA_ISITSUBSET] := .T.
 	  
    ENDIF	  
    
@@ -1626,12 +1662,8 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
 		 uReturn := NIL
 		 
 	CASE uInfoType == DBI_FULLPATH // 10  /* The Full path to the data file      */
-	
-		 IF FILE(SET(_SET_DEFAULT)+"\"+CFILENOPATH(aWAData[WA_TABLENAME]))
-            uReturn := SET(_SET_DEFAULT)
-		 ELSE
-		    uReturn := CFILENOPATH(aWAData[WA_TABLENAME])
-         ENDIF		 
+		 
+         uReturn := ""
 		 
 	CASE uInfoType == DBI_ISFLOCK // 20  /* Is there a file lock active?        */
 	
@@ -2219,7 +2251,7 @@ STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
    IF ! Empty( cTable ) .AND. ! Empty( aRData[ WA_CATALOG ] )
       TRY
          // n := aRData[ WA_CATALOG ]:Tables( cTable )
-         lRet := HB_SUCCESS
+         lRet := HB_SUCCESS //sql select "SHOW TABLES LIKE 'yourtable';"
       CATCH
       END
       IF ! Empty( cIndex )
