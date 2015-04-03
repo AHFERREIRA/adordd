@@ -786,12 +786,25 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
 		
    CASE nIndex == DBOI_NAME
    
-        IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
-           aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
-           aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
-         ELSE
-            aOrderInfo[ UR_ORI_RESULT ] := ""
-        ENDIF
+        IF VALTYPE(aOrderInfo[ UR_ORI_TAG ]) = "N"
+		
+           IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
+              aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
+              aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
+           ELSE
+              aOrderInfo[ UR_ORI_RESULT ] := ""
+           ENDIF
+		   
+		ELSE
+		
+            n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
+		    IF n > 0
+               aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][n]
+            ELSE
+               aOrderInfo[ UR_ORI_RESULT ] := ""
+            ENDIF
+		
+		ENDIF
 		
    CASE nIndex == DBOI_NUMBER
    
@@ -808,12 +821,25 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
 		
    CASE nIndex == DBOI_BAGNAME
    
-        IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
-            aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
-            aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
-        ELSE
-           aOrderInfo[ UR_ORI_RESULT ] := ""
-        ENDIF
+        IF VALTYPE(aOrderInfo[ UR_ORI_TAG ]) = "N"
+		
+           IF ! Empty( aWAData[ WA_INDEXES ] ) .AND. ! Empty( aOrderInfo[ UR_ORI_TAG ] ) .AND. ;
+              aOrderInfo[ UR_ORI_TAG ] <= LEN(aWAData[ WA_INDEXES ])
+              aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][aOrderInfo[ UR_ORI_TAG]]
+           ELSE
+              aOrderInfo[ UR_ORI_RESULT ] := ""
+           ENDIF
+		   
+		ELSE
+		
+            n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
+		    IF n > 0
+               aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][n]
+            ELSE
+               aOrderInfo[ UR_ORI_RESULT ] := ""
+            ENDIF
+		
+		ENDIF
 		
    CASE nIndex == DBOI_BAGEXT
    
@@ -1502,12 +1528,17 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
       RETURN HB_FAILURE
    ENDIF
    
-   //this tell us if we are in a subset of records from previous seek
-   IF aWAData[WA_ISITSUBSET]
-      // ISNT WORKING STILL ADO_ORDLSTFOCUS(nWa,aWAData[INDEXACTIVE])
-   ENDIF
-   
    aSeek := ADOPseudoSeek(nWA,cKey,aWAData,lSoftSeek)
+
+/*   //this tell us if we are in a subset of records from previous seek we need to reset to defaut to have another seek
+   IF aWAData[WA_ISITSUBSET] .AND. aSeek[3] //ONLY IF ITS FIND IF SEEK NEW RECORDSET WILL BE ALWAYS CREATED
+
+      oRecordSet:Close()
+      cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData)
+      oRecordSet:Open( cSql,aWAData[ WA_CONNECTION ] )
+
+   ENDIF
+ */  
    
    IF aSeek[3] //no more than one field in the expression we can use find
       IF lSoftSeek 
