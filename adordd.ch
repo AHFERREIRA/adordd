@@ -202,6 +202,15 @@
 #define adSearchBackward               -1
 #define adSearchForward                 1
 
+/* Transactions */
+#define adXactAbortRetaining                     262144 /*Performs retaining aborts by calling RollbackTrans to automatically start a new transaction. Not all providers support this behavior.*/
+#define adXactCommitRetaining                    131072 /*Performs retaining commits by calling CommitTrans to automatically start a new transaction. Not all providers support this behavior.*/
+
+/*Position Enum*/
+#define adPosBOF                        -2 /*Indicates that the current record pointer is at BOF (that is, the BOF property is True).*/
+#define adPosEOF                        -3 /*Indicates that the current record pointer is at EOF (that is, the EOF property is True).*/
+#define adPosUnknown                    -1 /*Indicates that the Recordset is empty, the current position is unknown, or the provider does not support the AbsolutePage or AbsolutePosition property.*/
+
 #command USE <(db)> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
