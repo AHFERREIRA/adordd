@@ -141,9 +141,6 @@ ANNOUNCE ADORDD
 
 #DEFINE CRLF CHR(13)+CHR(10)
 
-//TO TEST ALTERNATIVE WAY OF WORK IF THERE IS IN ALL TABLES FIELD HB_RECNO AUTOINC
-//OTHERWISE RESULTS WILL BE UNPREDICTABLE
-#DEFINE TABLES_WITH_FIELD_HB_RECNO  1=2 
 
 STATIC t_cTableName
 STATIC t_cEngine
@@ -201,7 +198,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       hb_FNameSplit( aOpenInfo[ UR_OI_NAME ],, @cName )
       aOpenInfo[ UR_OI_ALIAS ] := cName
    ENDIF
-/*  
+  
    aOpenInfo[ UR_OI_NAME ] += ".dbf"
 
    hb_adoSetTable( aOpenInfo[ UR_OI_NAME ] )
@@ -327,19 +324,19 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    ENDIF
 
    oRecordSet:CursorType :=   adOpenDynamic // adOpenKeyset adOpenDynamic
-   oRecordSet:CursorLocation := adUseClient //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
-   oRecordSet:LockType :=    adLockOptimistic //adLockOptimistic adLockPessimistic
+   oRecordSet:CursorLocation := adUseServer //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
+   oRecordSet:LockType :=    adLockPessimistic //adLockOptimistic adLockPessimistic
 
    IF aOpenInfo[UR_OI_READONLY]
       oRecordSet:LockType := adLockReadOnly
    ELSE
-      oRecordSet:LockType :=  adLockOptimistic //adLockOptimistic
+      oRecordSet:LockType :=  adLockPessimistic //adLockOptimistic
    ENDIF	  
 
    //oRecordSet:MaxRecords := 100 ?
    //oRecordSet:CacheSize := 50 //records increase performance set zero returns error set great server parameters max open rows error
 
-   //aWAData[ WA_TABLENAME ] := SUBSTR(CFILENOPATH(aWAData[ WA_TABLENAME ] ),1,LEN(CFILENOPATH(aWAData[ WA_TABLENAME ] ))-4)
+   aWAData[ WA_TABLENAME ] := SUBSTR(CFILENOPATH(aWAData[ WA_TABLENAME ] ),1,LEN(CFILENOPATH(aWAData[ WA_TABLENAME ] ))-4)
 
    IF aWAData[ WA_QUERY ] == "SELECT * FROM "
       oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
@@ -413,7 +410,7 @@ STATIC FUNCTION ADO_CLOSE( nWA )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-   
+
    //dont close connection as mugh be used by other recorsets
    // need to have all recordsets in same connection to use transactions
    IF !EMPTY( oRecordSet)
@@ -421,7 +418,7 @@ STATIC FUNCTION ADO_CLOSE( nWA )
          oRecordSet:Close()
       ENDIF
    ENDIF	  
-   
+   oRecordSet := NIL
    RETURN UR_SUPER_CLOSE( nWA )
    
   
@@ -585,9 +582,9 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
    IF !ADOEMPTYSET(oRecordSet) .AND. nRecord < nRecs  
 
 	  IF FIELDPOS("HBRECNO") > 0 // 100% SUPPORTED AND SAFE
-	  
-	     oRecordSet:MoveFisrt()
-		 oRecordSet:Find("HBRECNO = "+ALLTRIM(STR(nRecord,0)) )
+
+         oRecordSet:MoveFirst()
+		 oRecordSet:Find("HBRECNO LIKE "+ALLTRIM(STR(nRecord,0)) )
 
 	  ELSE
 	  
@@ -629,8 +626,8 @@ STATIC FUNCTION ADO_GOTOID( nWA, nRecord )
 
 	  IF FIELDPOS("HBRECNO") > 0 // 100% SUPPORTED AND SAFE
 	  
-         oRecordSet:MoveFisrt()
-		 oRecordSet:Find("HBRECNO = "+ALLTRIM(STR(nRecord,0)) )
+         oRecordSet:MoveFirst()
+		 oRecordSet:Find("HBRECNO LIKE "+ALLTRIM(STR(nRecord,0)) )
 		 
 	  ELSE
 
@@ -766,25 +763,41 @@ STATIC FUNCTION ADO_EOF( nWA, lEof )
 STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-   LOCAL aWdata := USRRDD_AREADATA( nWA )
+   LOCAL aWdata := USRRDD_AREADATA( nWA ), nRecord
+   LOCAL oRs
    
     //EXPERIMENTAL PHASE SEE ORDLSTF
-    IF TABLES_WITH_FIELD_HB_RECNO 
+    IF FIELDPOS("HBRECNO") > 0  
 	
-	   aWdata[WA_CONNECTION]:Execute()
+	   aWdata[WA_CONNECTION]:Execute("INSERT INTO "+aWdata[WA_TABLENAME]+" DEFAULT VALUES")
+	   
+	   //GETTING THE LAST INSERTED ROW / RECORD
+	   oRs :=  TOleAuto():New( "ADODB.Recordset" )
+	   oRs:Open("SELECT TOP 1 HBRECNO FROM "+aWdata[WA_TABLENAME]+" ORDER BY HBRECNO DESC",aWdata[WA_CONNECTION])
+	   
+	   //SAVE RECRD NR
+	   nRecord := oRs:Fields( 0 ):Value
+	   oRs:close()
+	   oRs := NIL //DESTROY
+	   
+	   //REFRESH THE CURRENT SET
 	   oRecordSet:Requery()
 	   
        IF !ADOEMPTYSET(oRecordSet) 
 	   
-          oRecordSet:MoveFisrt()
+          oRecordSet:MoveFirst()
 		  oRecordSet:Find("HBRECNO = "+ALLTRIM(STR(nRecord,0)) )
 		  
-	      NETERR(.F.)	
-          IF lUnlockAll
-	         ADO_UNLOCK(nWA)
-	      ENDIF	
-		
-          AADD(aWdata[ WA_LOCKLIST ],Recno())
+		  IF  !oRecordSet:Eof()
+	          NETERR(.F.)	
+              IF lUnlockAll
+	             ADO_UNLOCK(nWA)
+	          ENDIF	
+		  
+              AADD(aWdata[ WA_LOCKLIST ],Recno())
+		  ELSE
+		     NETERR(.T.)
+          ENDIF		  
 		  
        ELSE
 	   
@@ -796,7 +809,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 	
 	   TRY
 	   
-           oRecordSet:AddNew() //aCols,aVals)
+           oRecordSet:AddNew() 
 	       NETERR(.F.)	
            IF lUnlockAll
 	          ADO_UNLOCK(nWA)
@@ -821,13 +834,19 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 STATIC FUNCTION ADO_DELETED( nWA, lDeleted )
 
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+   
+RETURN .F. //NOT WORKING GIVE ERROR IN SOME UNKNOWN CIRCUNSTANCES
 
-    IF oRecordSet:Status == adRecDeleted
-       lDeleted := .T.
-    ELSE
-       lDeleted := .F.
+    IF !ADOEMPTYSET(oRecordSet)
+       IF oRecordSet:Status = adRecDeleted
+          lDeleted := .T.
+       ELSE
+          lDeleted := .F.
+       ENDIF
+	ELSE
+       lDeleted := .F.	
     ENDIF
-
+	
    RETURN HB_SUCCESS
    
 
@@ -986,6 +1005,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
    
    IF ! aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xValue )
       oRecordSet:Fields( nField - 1 ):Value := xValue
+	  
       TRY
          oRecordSet:Update()
       CATCH
@@ -1564,14 +1584,18 @@ STATIC FUNCTION ADOSCOPE(nWA,aWAdata, oRecordSet, aOrderInfo,nIndex)
   
 STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 
-   LOCAL nRecNo
+   LOCAL nRecNo 
    LOCAL aWAData    := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
    LOCAL cSql:="" ,n
    
    HB_SYMBOL_UNUSED( nWA )
    HB_SYMBOL_UNUSED( aOrderInfo )
-
+   
+   IF FIELDPOS("HBRECNO") > 0
+      ADO_RECID(nWA,@nRecno)
+   ENDIF
+   
    IF aOrderInfo[ UR_ORI_TAG ] <> NIL
    
       oRecordSet:Close()
@@ -1606,19 +1630,14 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 		 
       ENDIF
 	  
-      ADO_GOTOP( nWA )
-      //ADO_GOTO( nWA, nRecNo )
+	  IF FIELDPOS("HBRECNO") > 0
+	     ADO_GOTO( nWA, nRecNo )
+	  ELSE	 
+         ADO_GOTOP( nWA )
+      ENDIF
 	  aWAData[WA_ISITSUBSET] := .F.
 	  aWAData[ WA_INDEXACTIVE ] := n
 	  
-	   //EXPERIMENTAL PHASE DOES NOT WORK ADDNEW NOT POSSIBLE
-	   IF TABLES_WITH_FIELD_HB_RECNO 
-	      //create ado index only with adUseClient
-	      IF oRecordSet:CursorLocation = adUseClient
-		     oRecordSet:Fields(oRecordSet:Fields:Count-1 ):Properties("Optimize") := 1
-	      ENDIF
-	   ENDIF	 
-      
 	ELSE
 
 	   IF aWAData[ WA_INDEXACTIVE ] > 0
@@ -1629,7 +1648,7 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
 
 	   
 	ENDIF  
-	
+
 
    RETURN HB_SUCCESS
    
@@ -1816,7 +1835,7 @@ STATIC FUNCTION ADO_ORDDESTROY( nWA, aOrderInfo )
 
    
 STATIC FUNCTION IndexBuildExp(nWA,nIndex,aWAData,lCountRec,myCfor)  //notgroup for adoreccount
-   LOCAL cSql := "", cOrder:="", cUnique:="", cFor:="",cColIndexKey :=""
+   LOCAL cSql := "", cOrder:="", cUnique:="", cFor:=""
    
      DEFAULT lCountRec TO .F.
 	 DEFAULT myCfor TO "" //when it comes ex from ado_seek to add to where clause 
@@ -1827,14 +1846,6 @@ STATIC FUNCTION IndexBuildExp(nWA,nIndex,aWAData,lCountRec,myCfor)  //notgroup f
 		
 		IF !EMPTY(cOrder)
 		
-		   //EXPERIMENTAL PHASE doesnt work addnew not working someone know a solution
-		   // this would be the ideal way of work!
-		   IF TABLES_WITH_FIELD_HB_RECNO 
-		      cColIndexKey := cOrder
-		      cColIndexKey := STRTRAN(cColIndexKey,",","+") // for new column with field expression
-		      cColIndexKey := ", ("+cColIndexKey+") AS INDEXKEY "
-		   ENDIF
-		   
 	       cOrder := " ORDER BY "+STRTRAN(cOrder,"+",",")
 		   
 		ENDIF   
@@ -1865,7 +1876,7 @@ STATIC FUNCTION IndexBuildExp(nWA,nIndex,aWAData,lCountRec,myCfor)  //notgroup f
 	    cFor += IF(!EMPTY(cFor)," AND "," WHERE ")+mycFor
 	 ENDIF
 	 
-	 cSql := "SELECT "+ cUnique+cColIndexKey+" FROM " + aWAData[ WA_TABLENAME ]+ IF(!EMPTY(cFor),cFor,"")+ cOrder
+	 cSql := "SELECT "+ cUnique+" FROM " + aWAData[ WA_TABLENAME ]+ IF(!EMPTY(cFor),cFor,"")+ cOrder
 	
    RETURN cSql   
 /*                               END INDEX RELATED FUNCTIONS  */   
@@ -1953,6 +1964,9 @@ STATIC FUNCTION ADO_FLUSH( nWA )
       ADOROLLBACKTRANS(nWa) //ROLL IT BACK
 	  
    END
+   
+   // REQUERY THE RECORDSET
+   oRecordSet:Requery()
 
    RETURN HB_SUCCESS
 
@@ -2030,7 +2044,8 @@ STATIC FUNCTION ADO_CLEARFILTER( nWA )
 STATIC FUNCTION ADO_SETLOCATE( nWA, aScopeInfo )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
-
+//MSGINFO("SET OLOCATE "+PROCNAME(2)+" "+STR(PROCLINE(2)))
+//MSGINFO("LOC EXP "+aWAData[ WA_LOCATEFOR ])
    aScopeInfo[ UR_SI_CFOR ] := SQLTranslate( aWAData[ WA_LOCATEFOR ] )
 
    aWAData[ WA_SCOPEINFO ] := aScopeInfo
@@ -2105,6 +2120,12 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
    DEFAULT lFindLast TO .F.
    DEFAULT lSoftSeek TO .F.
    
+   IF ADOEMPTYSET(oRecordSet)
+      aWAData[ WA_FOUND ] := ! oRecordSet:EOF
+      aWAData[ WA_EOF ] := oRecordSet:EOF
+      RETURN HB_SUCCESS
+   ENDIF
+   
    IF aWAData[WA_INDEXACTIVE] = 0
       MSGALERT("No Index active seek not allowed!")
 	  RETURN HB_FAILURE
@@ -2152,32 +2173,19 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
 	  
    ELSE
 
-       IF !TABLES_WITH_FIELD_HB_RECNO 
-          //attention multiple fields in cseek expression cannot emulate behaviour of lSoftSeek 
-	      //more than one field in te seek expression has to be select
-	      oRecordSet:Close()
-          cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData,.F.,aSeek[2])
-          oRecordSet:Open( cSql,aWAData[ WA_CONNECTION ] )
+	  //attention multiple fields in cseek expression cannot emulate behaviour of lSoftSeek 
+	  //more than one field in te seek expression has to be select
+	  oRecordSet:Close()
+	  cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData,.F.,aSeek[2])
+	  oRecordSet:Open( cSql,aWAData[ WA_CONNECTION ] )
 
-	      IF lFindLast
-	         oRecordSet:MoveLast()
-	      ENDIF
-	  
-	      //TO CHECK NEXT CALLS IF WE ARE IN A SUBSSET TO REVERT TO DEFAULT SET
-	      aWAData[WA_ISITSUBSET] := .T.
+	  IF lFindLast
+		 oRecordSet:MoveLast()
+	  ENDIF
+  
+	  //TO CHECK NEXT CALLS IF WE ARE IN A SUBSSET TO REVERT TO DEFAULT SET
+	  aWAData[WA_ISITSUBSET] := .T.
 
-       ELSE
-	   
-          //EXPERIMENTAL PHASE DOES NOT WORK SEE ORDLSTADD ADDNEW NOT POSSIBLE
-          oRecordSet:MoveFirst()
-	      IF ALLTRIM(cKey) == ""
-	         oRecordSet:Find( "INDEXKEY = "+"'"+cKey+"'")
-	      ELSE
-             oRecordSet:Find( "INDEXKEY LIKE "+"'"+cKey+"*'")
-          ENDIF
-		  
-	   ENDIF
-	   
    ENDIF	  
    
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
@@ -2884,7 +2892,8 @@ STATIC FUNCTION SQLTranslate( cExpr )
    RETURN cExpr
 
    
-STATIC FUNCTION ADOSHOWERROR( oCn, lSilent )
+//STATIC 
+FUNCTION ADOSHOWERROR( oCn, lSilent )
 
    LOCAL nErr, oErr, cErr
 
@@ -3068,7 +3077,8 @@ LOCAL  Alista_fic:= { {"SECTOR",{"SECTOR","SECTORES"} },;
  {"CCFACT",{"CCFACT","NRENCOMEND,CODIGOPROD,DATAMOV ASC"},{"CCFACT1","NRFACTUR,CODIGOPROD,DATAMOV ASC"}} ,;
  {"ACESS1",{"ACESS1","ROTINA"}},;
  {"APPT",{"APPTDATE","DATE,USERID,TIME"},{"APPTNOME","NOME,DATE,TIME"},;
- {"APPTPEND","TERMINADO,DATE,TIME,USERID"},{"APPTUSER","USERID,DATE,TIME"}} }
+ {"APPTPEND","TERMINADO,DATE,TIME,USERID"},{"APPTUSER","USERID,DATE,TIME"}},;
+ {"OUTPUTS",{"OUTPUTS","TIPO,ROTINA,NOMERELATO"}}}
 
 RETURN Alista_fic
 

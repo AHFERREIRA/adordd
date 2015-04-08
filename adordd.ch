@@ -104,7 +104,7 @@
 #define adVarNumeric                    139
 #define adArray                         /* &H2000 */
 
-#define adRecDeleted                    4
+#define adRecDeleted                    0x4 /*Indicates that the record was deleted.*/
 
 #define adUseNone                       1
 #define adUseServer                     2
