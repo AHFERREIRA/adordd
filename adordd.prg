@@ -198,7 +198,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       hb_FNameSplit( aOpenInfo[ UR_OI_NAME ],, @cName )
       aOpenInfo[ UR_OI_ALIAS ] := cName
    ENDIF
-  
+/*  
    aOpenInfo[ UR_OI_NAME ] += ".dbf"
 
    hb_adoSetTable( aOpenInfo[ UR_OI_NAME ] )
@@ -324,8 +324,8 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    ENDIF
 
    oRecordSet:CursorType :=   adOpenDynamic // adOpenKeyset adOpenDynamic
-   oRecordSet:CursorLocation := adUseServer //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
-   oRecordSet:LockType :=    adLockPessimistic //adLockOptimistic adLockPessimistic
+   oRecordSet:CursorLocation := adUseClient //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
+   oRecordSet:LockType :=    adLockOptimistic //adLockOptimistic adLockPessimistic
 
    IF aOpenInfo[UR_OI_READONLY]
       oRecordSet:LockType := adLockReadOnly
@@ -336,7 +336,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    //oRecordSet:MaxRecords := 100 ?
    //oRecordSet:CacheSize := 50 //records increase performance set zero returns error set great server parameters max open rows error
 
-   aWAData[ WA_TABLENAME ] := SUBSTR(CFILENOPATH(aWAData[ WA_TABLENAME ] ),1,LEN(CFILENOPATH(aWAData[ WA_TABLENAME ] ))-4)
+  // aWAData[ WA_TABLENAME ] := SUBSTR(CFILENOPATH(aWAData[ WA_TABLENAME ] ),1,LEN(CFILENOPATH(aWAData[ WA_TABLENAME ] ))-4)
 
    IF aWAData[ WA_QUERY ] == "SELECT * FROM "
       oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
