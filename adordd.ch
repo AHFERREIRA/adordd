@@ -233,5 +233,101 @@
                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
          [ hb_adoSetLocateFor( <(for)> ); ] ;
          __dbLocate( <{for}>, <{while}>, <next>, <rec>, <.rest.> )
+		 
+/*		 TODO
 
+#command CREATE <(db)> [FROM <(src)>] [VIA <rdd>] [ALIAS <a>] ;
+                [<new: NEW>] [CODEPAGE <cp>] [CONNECTION <conn>] => ;
+         __dbCreate( <(db)>, <(src)>, <rdd>, <.new.>, <(a)>, <cp>, <conn>)
+
+#command COPY [STRUCTURE] [EXTENDED] [TO <(f)>] => __dbCopyXStruct( <(f)> )
+#command COPY [STRUCTURE] [TO <(f)>] [FIELDS <fields,...>] => ;
+         __dbCopyStruct( <(f)>, { <(fields)> } )
+
+#command COPY [TO <(f)>] [FIELDS <fields,...>] ;
+              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+              [RECORD <rec>] [<rest:REST>] [ALL] ;
+              [DELIMITED [WITH <*delim*>]] [CODEPAGE <cp>] => ;
+         __dbDelim( .T., <(f)>, <(delim)>, { <(fields)> }, ;
+                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
+
+#command COPY [TO <(f)>] [SDF] [FIELDS <fields,...>] ;
+              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+              [RECORD <rec>] [<rest:REST>] [ALL] [CODEPAGE <cp>] => ;
+         __dbSDF( .T., <(f)>, { <(fields)> }, ;
+                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
+
+#command COPY [TO <(f)>] [FIELDS <fields,...>] ;
+              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+              [RECORD <rec>] [<rest:REST>] [ALL] [VIA <rdd>] ;
+              [CODEPAGE <cp>] [CONNECTION <conn>] => ;
+         __dbCopy( <(f)>, { <(fields)> }, ;
+                   <{for}>, <{while}>, <next>, <rec>, <.rest.>, <rdd>, <conn>, <cp> )
+
+#command APPEND [FROM <(f)>] [FIELDS <fields,...>] ;
+                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+                [RECORD <rec>] [<rest:REST>] [ALL] ;
+                [DELIMITED [WITH <*delim*>]] [CODEPAGE <cp>] => ;
+         __dbDelim( .F., <(f)>, <(delim)>, { <(fields)> }, ;
+                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
+
+#command APPEND [FROM <(f)>] [SDF] [FIELDS <fields,...>] ;
+                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+                [RECORD <rec>] [<rest:REST>] [ALL] [CODEPAGE <cp>] => ;
+         __dbSDF( .F., <(f)>, { <(fields)> }, ;
+                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
+
+#command APPEND [FROM <(f)>] [FIELDS <fields,...>] ;
+                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+                [RECORD <rec>] [<rest:REST>] [ALL] [VIA <rdd>] ;
+                [CODEPAGE <cp>] [CONNECTION <conn>] => ;
+         __dbApp( <(f)>, { <(fields)> }, ;
+                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <rdd>, <conn>, <cp> )
+
+#command SORT [TO <(f)>] [ON <fields,...>] ;
+              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+              [RECORD <rec>] [<rest:REST>] [ALL] ;
+              [CODEPAGE <cp>] [CONNECTION <conn>] => ;
+         __dbSort( <(f)>, { <(fields)> }, ;
+                   <{for}>, <{while}>, <next>, <rec>, <.rest.>, <conn>, <cp> )
+
+#command TOTAL [TO <(f)>] [ON <key>] [FIELDS <fields,...>] ;
+               [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+               [RECORD <rec>] [<rest:REST>] [ALL] ;
+               [CODEPAGE <cp>] [CONNECTION <conn>] => ;
+         __dbTotal( <(f)>, <{key}>, { <(fields)> }, ;
+                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <conn>, <cp> )
+
+#command UPDATE [FROM <(alias)>] [ON <key>] [<rand:RANDOM>] ;
+                [REPLACE <f1> WITH <x1> [, <fN> WITH <xN>]] => ;
+         __dbUpdate( <(alias)>, <{key}>, <.rand.>, ;
+                     {|| _FIELD-><f1> := <x1> [, _FIELD-><fN> := <xN>]} )
+
+#command JOIN [WITH <(alias)>] [TO <f>] [FIELDS <fields,...>] [FOR <for>] => ;
+         __dbJoin( <(alias)>, <(f)>, { <(fields)> }, ;
+                   if(EMPTY(#<for>), { || .T. }, <{for}> ) )
+
+#command COUNT [TO <v>] ;
+               [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+               [RECORD <rec>] [<rest:REST>] [ALL] => ;
+         <v> := 0 ; DBEval( {|| <v> := <v> + 1}, ;
+                            <{for}>, <{while}>, <next>, <rec>, <.rest.> )
+
+#command SUM [ <x1> [, <xN>]  TO  <v1> [, <vN>] ] ;
+             [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+             [RECORD <rec>] [<rest:REST>] [ALL] => ;
+         <v1> := [ <vN> := ] 0 ;;
+         DBEval( {|| <v1> := <v1> + <x1> [, <vN> := <vN> + <xN> ]}, ;
+                 <{for}>, <{while}>, <next>, <rec>, <.rest.> )
+
+#command AVERAGE [ <x1> [, <xN>]  TO  <v1> [, <vN>] ] ;
+                 [FOR <for>] [WHILE <while>] [NEXT <next>] ;
+                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
+         M->__Avg := <v1> := [ <vN> := ] 0 ;;
+         DBEval( {|| M->__Avg := M->__Avg + 1, ;
+                 <v1> := <v1> + <x1> [, <vN> := <vN> + <xN>] }, ;
+                 <{for}>, <{while}>, <next>, <rec>, <.rest.> ) ;;
+         <v1> := <v1> / M->__Avg [ ; <vN> := <vN> / M->__Avg ]
+
+*/
 #endif
