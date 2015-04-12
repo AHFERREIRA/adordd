@@ -48,3 +48,4 @@ go to nrecord // comes back to select before the seek
 CONCURRENT TABLE/RECORD ACESS (ready but not really tested)
 
 We are getting there.
+ 
