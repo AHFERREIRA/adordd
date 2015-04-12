@@ -6,6 +6,10 @@
  * Antonio Linares <alinares@fivetechsoft.com>
  * www - http://harbour-project.org
  *
+ * Copyright 2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
+ * Constant Group: Supports
+ * COMANDS AFTER LOCATE
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
@@ -233,6 +237,13 @@
                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
          [ hb_adoSetLocateFor( <(for)> ); ] ;
          __dbLocate( <{for}>, <{while}>, <next>, <rec>, <.rest.> )
+		 
+/* sets for adordd */
+#command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
+#command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
+#command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
+#command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
+#command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
 		 
 /*		 TODO
 
