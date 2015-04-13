@@ -33,7 +33,7 @@ SORT
 UPDATE
 COUNT
 TOTAL
-SUM  
+SUM
 AVERAGE
 RESET SELECTS TO DEFAULT AFTER A SEEK WITH MORE THAN ONE FIELD IN SEEK EXPRESSION BY ISSUING
 A GO TO NRECORD TO A RECNO OUT OF THE ACTUAL SELECT
@@ -43,7 +43,6 @@ Seek "whatever"+"wahtever too" //2 fields
 do while seek expression true
 enddo
 go to nrecord // comes back to select before the seek
-
 
 CONCURRENT TABLE/RECORD ACESS (ready but not really tested)
 
