@@ -108,7 +108,7 @@
 #define adVarNumeric                    139
 #define adArray                         /* &H2000 */
 
-#define adRecDeleted                    0x4 /*Indicates that the record was deleted.*/
+#define adRecDeleted                    4 /*Indicates that the record was deleted.*/
 
 #define adUseNone                       1
 #define adUseServer                     2
@@ -215,15 +215,15 @@
 #define adPosEOF                        -3 /*Indicates that the current record pointer is at EOF (that is, the EOF property is True).*/
 #define adPosUnknown                    -1 /*Indicates that the Recordset is empty, the current position is unknown, or the provider does not support the AbsolutePage or AbsolutePosition property.*/
 
-#command USE <(db)> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
+#command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
-            [ TABLE <cTable> ] ;
-            [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, SQL, FIREBIRD> ];
-            [ FROM <cServer> ] ;
+            [ FROM DATABASE <(db)> ] ;
+            [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, MSSQL, FIREBIRD, POSTGRE, ANYWHERE, DBASE, SQLITE, FOXPRO, ADS> ];
+            [ FROM SERVER <cServer> ] ;
             [ QUERY <cQuery> ] ;
             [ USER <cUser> PASSWORD <cPassword> ]=> ;
-         [ hb_adoSetTable( <cTable> ) ; ] ;
+         [ hb_adoSetDSource(<(db)>) ; ] ;
          [ hb_adoSetEngine( <(dbEngine)> ) ; ] ;
          [ hb_adoSetServer( <cServer> ) ; ] ;
          [ hb_adoSetQuery( <cQuery> ) ; ] ;
@@ -244,7 +244,9 @@
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
-		 
+#command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> USER TO <cUser>;
+  PASSWORD TO <cPass> => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
+  
 /*		 TODO
 
 #command CREATE <(db)> [FROM <(src)>] [VIA <rdd>] [ALIAS <a>] ;
@@ -295,50 +297,9 @@
          __dbApp( <(f)>, { <(fields)> }, ;
                   <{for}>, <{while}>, <next>, <rec>, <.rest.>, <rdd>, <conn>, <cp> )
 
-#command SORT [TO <(f)>] [ON <fields,...>] ;
-              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-              [RECORD <rec>] [<rest:REST>] [ALL] ;
-              [CODEPAGE <cp>] [CONNECTION <conn>] => ;
-         __dbSort( <(f)>, { <(fields)> }, ;
-                   <{for}>, <{while}>, <next>, <rec>, <.rest.>, <conn>, <cp> )
-
-#command TOTAL [TO <(f)>] [ON <key>] [FIELDS <fields,...>] ;
-               [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-               [RECORD <rec>] [<rest:REST>] [ALL] ;
-               [CODEPAGE <cp>] [CONNECTION <conn>] => ;
-         __dbTotal( <(f)>, <{key}>, { <(fields)> }, ;
-                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <conn>, <cp> )
-
-#command UPDATE [FROM <(alias)>] [ON <key>] [<rand:RANDOM>] ;
-                [REPLACE <f1> WITH <x1> [, <fN> WITH <xN>]] => ;
-         __dbUpdate( <(alias)>, <{key}>, <.rand.>, ;
-                     {|| _FIELD-><f1> := <x1> [, _FIELD-><fN> := <xN>]} )
-
 #command JOIN [WITH <(alias)>] [TO <f>] [FIELDS <fields,...>] [FOR <for>] => ;
          __dbJoin( <(alias)>, <(f)>, { <(fields)> }, ;
                    if(EMPTY(#<for>), { || .T. }, <{for}> ) )
-
-#command COUNT [TO <v>] ;
-               [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-               [RECORD <rec>] [<rest:REST>] [ALL] => ;
-         <v> := 0 ; DBEval( {|| <v> := <v> + 1}, ;
-                            <{for}>, <{while}>, <next>, <rec>, <.rest.> )
-
-#command SUM [ <x1> [, <xN>]  TO  <v1> [, <vN>] ] ;
-             [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-             [RECORD <rec>] [<rest:REST>] [ALL] => ;
-         <v1> := [ <vN> := ] 0 ;;
-         DBEval( {|| <v1> := <v1> + <x1> [, <vN> := <vN> + <xN> ]}, ;
-                 <{for}>, <{while}>, <next>, <rec>, <.rest.> )
-
-#command AVERAGE [ <x1> [, <xN>]  TO  <v1> [, <vN>] ] ;
-                 [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
-         M->__Avg := <v1> := [ <vN> := ] 0 ;;
-         DBEval( {|| M->__Avg := M->__Avg + 1, ;
-                 <v1> := <v1> + <x1> [, <vN> := <vN> + <xN>] }, ;
-                 <{for}>, <{while}>, <next>, <rec>, <.rest.> ) ;;
-         <v1> := <v1> / M->__Avg [ ; <vN> := <vN> / M->__Avg ]
 
 */
 #endif
