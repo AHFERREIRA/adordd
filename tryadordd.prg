@@ -43,16 +43,103 @@
 	SET AUTOPEN ON //might be OFF if you wish
 	SET AUTORDER TO 1 // first index opened can be other
 	
+	//set default parameters to adordd if you do not USE COMMAND or dont pretend to include this info
+	//set it here
+	SET ADO DEFAULT DATABASE TO "d:\followup-testes\TESTES FOLLOWUP.add" SERVER TO "ADS" ENGINE TO "ADS" ;
+	USER TO "adssys" PASSWORD TO ""
+
+/*               THE ONLY CHANGES IN YOUR APP CODE END HERE! (SHOULD)              */
+
+
+/*                                T R I A L S
+   PEASE READ THIS CAREFULLY!
+   
+   PLEASE REMEMBER THAT ALTHOUGH ADORDD STILL AND MIGHT WORK WITHOUT ANY AUTOINC FIELD AS RECNO
+   RESULT WILL BE UNPREDICTABLE IN SOME CIRCUNSTANCES OR ERROR MIGHT OCCOUR.
+   THE FINAL RELEASE WIL NOT WORK WITHOUT SUCH A FIELD  
+   
+   INDEXES WITH DATES AND IN SOME BROWSE WITHIN A DATE SCOPE MOVEMENT HAS STILL SOME PROBLEMS   
+   
+   LOCATES HAVE TO BE CHANGED TO:
+   
+   EX:
+   IF RDDSNAME() = "ADORDD"
+      hb_adoSetLocateFor( "pessoa = "+"'"+(MeuNome())+"'")
+	  locate for "pessoa = "+"'"+(MeuNome())+"'"
+   ELSE	  
+      locate for rtrim(MeuNome()) $ (caliasi)->pessoa
+   ENDIF
+   
+   WHEN YOU DELETE A RECORD YOU CANT ACCESS IT ANYMORE. THUS CODE LIKE THIS IS ILLEGAL:
+
+   DELETE RECORD
+   BLANKREC
+
+   THIS MUST BE CHANGED TO
+   
+   IF RDDSNAME() = "ADORDD"
+      BLANKREC
+      DELETE RECORD
+   ELSE
+      DELETE RECORD
+      BLANKREC
+   ENDIF
+   
+   FILTERS ARE REALLY SELECTS USING FILTER2SQL() IN ADORDD THAT ALLOW THE USE OF NORMAL DBF FILTERS
+   THIS IS COFIGURED FOR ADS OR USUSAL SQL SINTAX BUT YOU CAN CONFIGURE IT FOR ANY DB 
+   
+   BESIDES THESE CHANGES APP SHOULD RUN WITHOUT ANY CODE LOGIC CHANGE
+
+   PLEASE REPORT ANY BUGS! THANKS!   */	
+   
+	DBCREATE("database;table;dbengine;server;user;password",;
+            {{"field1","+",10,0},;
+             {"field2","N",10,3},;
+             {"field3","D",8,0},;
+             {"field4","L",1,0},;
+             {"field5","N",10,0},;
+             {"fieldmemo","M",10,0}},"ADORDD",.T.,"Trial") 
+	
+	APPEND BLANK
+	REPLACE FIELD2 WITH ADORDD
+	REPLACE FIELD3 WITH DATE()
+	BROWSE()
+	CLOSE TRIAL
+	
+	SELE 0
+	/*
+	WE DONT USE THIS COMMAND SO IT IS NOT TESTED IF YOU FIND SOME PROBLEM CHECK ADORDD.CH
+	
+    USE cTable VIA adordd ALIAS calias NEW SHARED CODEPAGE whatever INDEX cindex1;
+      FROM DATABASE cDatabase FROM SERVER cServer QUERY "SELECT  * FROM "	USER admin PASSWORD admin
+	  
+	The tested way its to define ADO DEFAULTS see above and just call normal USE   
+	*/
+	
+	SELE 1
 	USE ....
+	SELE 2
+	USE ....
+	SET INDEX TO
+	SELE 1
+	SET RELATION ....
+	
+	NREG  := RECNO()
+	SEEK ???
+	DO WHILE ???
+	   MSGINFO(???)
+	   DBSKIP()
+	ENDDO
 	
 	//try changing index focus
+	ORDSETFOCUS( ???? )
 	BROWSE()
 	
 	//try set up filter
-	
+	SET FILTER TO ????
 	BROWSE()
 	
-	//etc... or just linked to you app and check it.
+	//etc... or just linked adordd to you app and check it.
 	
 RETURN nil	
 	
