@@ -2,6 +2,7 @@
 //2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
  
  FUNCTION Main()
+ LOCAL cSql :=""
  
   RddRegister("ADORDD",1) 
   RddSetDefault("ADORDD") 
@@ -190,6 +191,24 @@
    BROWSE()
    DbCloseAll()
    
+   cSql := "CREATE VIEW CONTACTS AS SELECT TABLE1.FIRST, TABLE1.LAST,"+;
+            "TABLE1.AGE, TABLE2.ADDRESS, TABLE2.EMAIL "+;
+			"FROM TABLE1 LEFT OUTER JOIN TABLE2 ON TABLE1.CODID = TABLE2.CODID"
+   MSGINFO("RUNING SQL "+cSql)
+   
+   TRY
+      GETADOCONN():EXECUTE(cSql)
+   CATCH
+      ADOSHOWERROR( GETADOCONN())
+   END   
+   
+   SELE 0
+   USE CONTACTS
+   MSGINFO("BROWSING VIEW CONTACTS")
+   BROWSE()
+   INDEX ON ADDRESS TO TMP2
+   MSGINFO("VIEW INDEXED BY ADDRESS")
+   BROWSE()
    
 RETURN nil	
 	
