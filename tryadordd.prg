@@ -1,52 +1,53 @@
+
+//2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
+ 
  FUNCTION Main()
  
   RddRegister("ADORDD",1) 
   RddSetDefault("ADORDD") 
 
-  //sql aware tables index expressions 
-  //ATTENTION ALL MUST BE UPPERCASE
-  //index files array needed for the adordd for your application
-  //order expressions already translated to sql DONT FORGET TO replace taitional + sign with ,
-  //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","WHERE EXPRESSION AS USED FOR FOREXPRESSION","UNIQUE - DISTINCT ANY SQL STAT BEFORE * FROM"} }
-  //temporary indexes are not included here they are create on fly and added to temindex list array
-  //they are only valid through the duration of the application
-  //the temp index name is auto given by adordd
-  SET ADO TABLES INDEX LIST TO { {"ENCCLIST",{"ENCCPRO","NRENCOMEND,CODIGOPROD,ARMAZEM"},;
-	   {"PROENCC","CODIGOPROD,ARMAZEM,NRENCOMEND"},{"MECPD","GUIA,CODCLIENTE,CODIGOPROD,ARMAZEM"},;
-	   {"CDENCCL","CODCLIENTE"},{"PTFACT","NRFACTUR,CODCLIENTE,CODIGOPROD,ARMAZEM"},;
-	   {"NRFPROD","NRFACTUR,CODIGOPROD,ARMAZEM,ANO ASC,SEMENTREGA ASC"} ,;
-	   {"CCONTRT","CODIGOPROD,NRCONTRATO"}} }
+    //sql aware tables index expressions 
+    //ATTENTION ALL MUST BE UPPERCASE
+    //index files array needed for the adordd for your application
+    //order expressions already translated to sql DONT FORGET TO replace taitional + sign with ,
+    //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","WHERE EXPRESSION AS USED FOR FOREXPRESSION","UNIQUE - DISTINCT ANY SQL STAT BEFORE * FROM"} }
+    //temporary indexes are not included here they are create on fly and added to temindex list array
+    //they are only valid through the duration of the application
+    //the temp index name is auto given by adordd
+  
+    //SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
 	 
 	//dbfs type index expression 
     //ATTENTION ALL MUST BE UPPERCASE
     //index files array needed for the adordd for your application 
     //order expressions as dbfs type
     //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","FOR EXPRESSION","UNIQUE" } }
+	
+    //SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
+
+    //temporary index names
     //temporary indexes are not included here they are create on fly and added to temindex list array
     //they are only valid through the duration of the application
     //the temp index name is auto given by adordd	
-    SET ADODBF TABLES INDEX LIST TO {  {"ENCCLIST",{"ENCCPRO","NRENCOMEND+CODIGOPROD+ARMAZEM"},;
-     {"PROENCC","CODIGOPROD+ARMAZEM+NRENCOMEND"},{"MECPD","GUIA+CODCLIENTE+CODIGOPROD+ARMAZEM"},;
-     {"CDENCCL","CODCLIENTE"},{"PTFACT","NRFACTUR+CODCLIENTE+CODIGOPROD+ARMAZEM"},;
-     {"NRFPROD","NRFACTUR+CODIGOPROD+ARMAZEM+STR(VAL(ANO),4,0)+STR(VAL(SEMENTREGA),2,0)"} ,;
-     {"CCONTRT","CODIGOPROD+NRCONTRATO"}} }
-
-    //temporary index names
-    SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+	
+    //SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
 	
 	//each table autoinc field used as recno 
-    SET ADO FIELDRECNO TABLES LIST TO {{"ENCCLIST","HBRECNO"},{"FACTURAS","HBRECNO"}}
+	
+    //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
 	
 	//default table autoinc field used as recno
-    SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+	
+    //SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
 
-	SET AUTOPEN ON //might be OFF if you wish
-	SET AUTORDER TO 1 // first index opened can be other
+	//SET AUTOPEN ON //might be OFF if you wish
+	//SET AUTORDER TO 1 // first index opened can be other
 	
 	//set default parameters to adordd if you do not USE COMMAND or dont pretend to include this info
 	//set it here
-	SET ADO DEFAULT DATABASE TO "d:\followup-testes\TESTES FOLLOWUP.add" SERVER TO "ADS" ENGINE TO "ADS" ;
-	USER TO "adssys" PASSWORD TO ""
+	
+	//SET ADO DEFAULT DATABASE TO "test2.mdb" SERVER TO "ACCESS" ENGINE TO "ACESS" ;
+	//USER TO "" PASSWORD TO ""
 
 /*               THE ONLY CHANGES IN YOUR APP CODE END HERE! (SHOULD)              */
 
@@ -58,7 +59,7 @@
    RESULT WILL BE UNPREDICTABLE IN SOME CIRCUNSTANCES OR ERROR MIGHT OCCOUR.
    THE FINAL RELEASE WIL NOT WORK WITHOUT SUCH A FIELD  
    
-   INDEXES WITH DATES AND IN SOME BROWSE WITHIN A DATE SCOPE MOVEMENT HAS STILL SOME PROBLEMS   
+   INDEXES WITH DATES IN SOME BROWSE WITHIN A DATE SCOPE RECORD MOVEMENT HAS STILL SOME PROBLEMS   
    
    LOCATES HAVE TO BE CHANGED TO:
    
@@ -86,61 +87,110 @@
    ENDIF
    
    FILTERS ARE REALLY SELECTS USING FILTER2SQL() IN ADORDD THAT ALLOW THE USE OF NORMAL DBF FILTERS
-   THIS IS COFIGURED FOR ADS OR USUSAL SQL SINTAX BUT YOU CAN CONFIGURE IT FOR ANY DB 
+   EXPRESSIONS. THIS IS COFIGURED FOR ADS OR USUAL SQL SINTAX BUT YOU CAN CONFIGURE IT FOR ANY DB 
    
    BESIDES THESE CHANGES APP SHOULD RUN WITHOUT ANY CODE LOGIC CHANGE
 
    PLEASE REPORT ANY BUGS! THANKS!   */	
    
-	DBCREATE("database;table;dbengine;server;user;password",;
-            {{"field1","+",10,0},;
-             {"field2","N",10,3},;
-             {"field3","D",8,0},;
-             {"field4","L",1,0},;
-             {"field5","N",10,0},;
-             {"fieldmemo","M",10,0}},"ADORDD",.T.,"Trial") 
+    SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
+    SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
+    SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+    SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
+    SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+	SET AUTOPEN ON //might be OFF if you wish
+	SET AUTORDER TO 1 // first index opened can be other
 	
-	APPEND BLANK
-	REPLACE FIELD2 WITH ADORDD
-	REPLACE FIELD3 WITH DATE()
-	BROWSE()
-	CLOSE TRIAL
-	
-	SELE 0
-	/*
-	WE DONT USE THIS COMMAND SO IT IS NOT TESTED IF YOU FIND SOME PROBLEM CHECK ADORDD.CH
-	
-    USE cTable VIA adordd ALIAS calias NEW SHARED CODEPAGE whatever INDEX cindex1;
-      FROM DATABASE cDatabase FROM SERVER cServer QUERY "SELECT  * FROM "	USER admin PASSWORD admin
-	  
-	The tested way its to define ADO DEFAULTS see above and just call normal USE   
-	*/
-	
-	SELE 1
-	USE ....
-	SELE 2
-	USE ....
-	SET INDEX TO
-	SELE 1
-	SET RELATION ....
-	
-	NREG  := RECNO()
-	SEEK ???
-	DO WHILE ???
-	   MSGINFO(???)
-	   DBSKIP()
-	ENDDO
-	
-	//try changing index focus
-	ORDSETFOCUS( ???? )
-	BROWSE()
-	
-	//try set up filter
-	SET FILTER TO ????
-	BROWSE()
-	
-	//etc... or just linked adordd to you app and check it.
-	
+    //need to include complete path
+    SET ADO DEFAULT DATABASE TO "\TEST2.mdb"  ENGINE TO "ACCESS" USER TO "" PASSWORD TO ""
+  
+
+   IF !FILE(   "\test2.mdb"   )
+      //need to include complete path
+      DbCreate( "\test2.mdb;table1", ;
+	                                { { "CODID",   "C", 10, 0 },;
+	                                  { "FIRST",   "C", 30, 0 },;
+                                      { "LAST",    "C", 30, 0 },;
+                                      { "AGE",     "N",  8, 0 },;
+									  { "HBRECNO", "+", 10, 0  } }, "ADORDD" )
+	 //need to include complete path								  
+     DbCreate( "\test2.mdb;table2", ;
+	                                { { "CODID",    "C", 10, 0 },;
+	                                  { "ADDRESS",  "C", 30, 0 },;
+                                      { "PHONE",    "C", 30, 0 },;
+                                      { "EMAIL",    "C", 100,0 },;
+									  { "HBRECNO",  "+", 10,0  } }, "ADORDD" )		
+    
+     SELE 0
+     USE table1 ALIAS "TEST1"									  
+   
+     APPEND BLANK
+     test1->First   := "HOMER si no Homer"
+     test1->Last    := "Simpson"
+     test1->Age     := 45
+     test1->codid   := "0001"
+   
+     APPEND BLANK
+     test1->First   := "Lara"
+     test1->Last    := "Croft si no"
+     test1->Age     := 32
+     test1->codid   := "0002"
+     test1->(dbcommit())
+	 
+     SELE 0
+     USE table2 ALIAS "TEST2"
+   
+     APPEND BLANK
+     test2->address := "742 Evergreen Terrace"
+     test2->phone   := "01 2920002"
+     test2->email   := "homer@homersimpson.com"
+     test2->codid   := "0001"
+   
+     APPEND BLANK
+     test2->address := "Raymond Street"
+     test2->phone   := "0039 29933003"
+     test2->email   := "lara@laracroft.com"
+     test2->codid   := "0002"
+	 test2->(dbcommit())
+	 
+	 CLOSE ALL
+   ENDIF
+
+   SELE 0
+   USE table1 ALIAS "TEST1"
+   SELE 0
+   USE table2 ALIAS "TEST2"
+   
+   SELE TEST1
+   GO TOP
+   MSGINFO("BROWSE DEFAULT ORDER TABLE1")
+   Browse()
+   
+   SELE TEST 2
+   GO TOP
+   MSGINFO("BROWSE DEFAULT ORDER TABLE2")
+   Browse()
+   
+   SELE TEST1
+   SET RELATION TO CODID INTO TEST2
+   MSGINFO("SET RELATION TO CODID FROM TABLE1 TO TABLE2")
+   GO TOP
+   DO WHILE !EOF()
+      MSGINFO("Name "+TEST1->FIRST+" Address "+TEST2->ADDRESS)
+      DBSKIP()
+   ENDDO
+   
+   MSGINFO("BROWSE TABLE1")
+   BROWSE()
+   
+   MSGINFO("CHANGE ORDER CREATE INDEX ON LAST TABLE1")
+   INDEX ON LAST TO TMP
+   SET INDEX TO TMP
+
+   BROWSE()
+   DbCloseAll()
+   
+   
 RETURN nil	
 	
 	
