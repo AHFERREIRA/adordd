@@ -228,7 +228,7 @@
          [ hb_adoSetServer( <cServer> ) ; ] ;
          [ hb_adoSetQuery( <cQuery> ) ; ] ;
          [ hb_adoSetUser( <cUser> ); hb_adoSetPassword( <cPassword> ) ; ] ;
-         dbUseArea( <.nw.>, <rdd>, <(db)>, <(a)>, ;
+         dbUseArea( <.nw.>, <rdd>, <(cTable)>, <(a)>, ;
                     iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> [, <cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
@@ -244,8 +244,8 @@
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
-#command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> USER TO <cUser>;
-  PASSWORD TO <cPass> => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
+#command SET ADO DEFAULT DATABASE TO <cDB> [SERVER TO <cServer>] ENGINE TO <cEngine> [USER TO <cUser>];
+  [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
   
 /*		 TODO
 
