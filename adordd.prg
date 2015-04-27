@@ -270,13 +270,13 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    ENDIF
 
    oRecordSet:CursorType :=   adOpenDynamic // adOpenKeyset adOpenDynamic
-   oRecordSet:CursorLocation := adUseClient //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
-   oRecordSet:LockType :=    adLockOptimistic //adLockOptimistic adLockPessimistic
+   oRecordSet:CursorLocation := IF(aWAData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseServer) //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
+   oRecordSet:LockType :=    IF(aWAData[ WA_ENGINE ] = "ACCESS", adLockOptimistic, adLockPessimistic) //adLockOptimistic adLockPessimistic
 
    IF aOpenInfo[UR_OI_READONLY]
       oRecordSet:LockType := adLockReadOnly
    ELSE
-      oRecordSet:LockType :=  adLockOptimistic //adLockPessimistic //adLockOptimistic
+      oRecordSet:LockType :=  IF(aWAData[ WA_ENGINE ] = "ACCESS", adLockOptimistic, adLockPessimistic) //adLockPessimistic //adLockOptimistic
    ENDIF	  
 
    //PROPERIES AFFECTING PERFORMANCE TRY
@@ -359,7 +359,7 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
   IF Empty( aOpenInfo[ UR_OI_CONNECT ] )
    
      IF EMPTY(oConnection)
-	  
+
 	    aWAData[ WA_CONNECTION ] :=  TOleAuto():New( "ADODB.Connection" )
 	    oConnection := aWAData[ WA_CONNECTION ]
 		 
@@ -374,14 +374,14 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 
 		DO CASE
 		  
-		  CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".mdb"
+		  CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".mdb" .OR. aWAData[ WA_ENGINE ] = "ACCESS"
 		  
 			 IF Empty( aWAData[ WA_PASSWORD ] )
 				aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  )
 			 ELSE
 				aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  + ";Jet OLEDB:Database Password=" + AllTrim( aWAData[ WA_PASSWORD ] ) )
 			 ENDIF
-			 
+
 		  CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".xls" 
 		  
 			 aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  + ";Extended Properties='Excel 8.0;HDR=YES';Persist Security Info=False" )
@@ -613,14 +613,17 @@ STATIC FUNCTION ADO_RECNO( nWA, nRecNo )
    
    
     IF !EMPTY(aWAData[WA_FIELDRECNO])  // 100% SUPPORTED AND SAFE
-	
+
 	   IF !oRecordSet:Eof()
+  
 	      ADO_GETVALUE( nWA, aWAData[WA_FIELDRECNO]+1, @nRecNo ) 
+ 		  
 	   ELSE
-	   
-          nRecNo := ADO_RECCOUNT( nWA, nRecords )+1	  
-		 
+
+           nRecNo := ADORECCOUNT(nWA,oRecordSet)+1 //  ADO_RECCOUNT( nWA, @nRecNo )
+		  
 	   ENDIF
+	   
     ELSE
 	
 	   IF oRecordSet:Supports(adBookmark) 
@@ -673,8 +676,12 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    LOCAL oCon := aAWData[WA_CONNECTION]
    LOCAL nCount := 0, cSql:="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
     
+   IF ADOEMPTYSET(oRecordSet)	
+      RETURN nCount
+   ENDIF	  
    //Making it lightning faster
-   oRs:CursorLocation := adUseServer
+   
+   oRS:CursorLocation := IF(aAWData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseServer) //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
    oRs:CursorType := adOpenForwardOnly
    oRs:LockType := adLockReadOnly
 
@@ -693,7 +700,6 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    oRs:open(cSql,oCon)
    nCount := oRs:Fields( 0 ):Value
    oRs:close()
-   
     
    RETURN nCount   
 
@@ -915,28 +921,34 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
         IF aStruct[ n, 6 ]
             AADD( aCols, aStruct[ n, 1 ] )
             AADD( aVals, hb_DeCode( aStruct[ n, 2 ], 'C', SPACE( aStruct[ n, 3 ] ), ;
-               'D', DATE(), 'L', .f., 'M', SPACE(255), 'N', 0, 'T', DATETIME(), '' ) )
+               'D', CTOD("  /  /  "), 'L', .f., 'M', SPACE(255), 'N', 0, 'T', "", '' ) )
          ENDIF
     NEXT
 	
     IF ! EMPTY( aCols )
-	
+
       TRY
-	   
+ 
          oRs:AddNew( aCols, aVals )
 		 oRs:Update()
+		 
+		 aWData[ WA_EOF ] := oRs:Eof()
+		 aWData[ WA_BOF ] := oRs:Bof()
+		 
          lAdded   := .t.
 		 NETERR(.F.)	
-		 
+ 
          IF lUnlockAll
             ADO_UNLOCK(nWA)
          ENDIF	
-		 
-		 ADO_RECNO( nWA, @nRecNo )
+	 
+		 ADO_RECID( nWA, @nRecNo )
          AADD(aWdata[ WA_LOCKLIST ],nRecNo) 
 		 
     CATCH
+	
          NETERR(.T.)
+		 ADOSHOWERROR(aWdata[WA_CONNECTION])
     END
 	  
    ELSE
@@ -945,9 +957,9 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 	  
    ENDIF
    
-    IF !EMPTY(aWData[WA_PENDINGREL]) .AND. PROCNAME(2) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
-       ADO_FORCEREL( nWA ) 
-    ENDIF
+   IF !EMPTY(aWData[WA_PENDINGREL]) .AND. PROCNAME(2) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
+      ADO_FORCEREL( nWA ) 
+   ENDIF
 
    RETURN IF(lAdded,HB_SUCCESS,HB_FAILURE)
    
@@ -1125,22 +1137,32 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL nRecNo
+   LOCAL nRecNo, aOrderInfo  := ARRAY(UR_ORI_SIZE)
    
+
    IF ! aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xValue )
-   
+ 
       //CHECK IF THE FIELD CA BE RW
 	  IF ADO_FIELDSTRUCT( oRecordSet, nField-1 )[6]
 
          oRecordSet:Fields( nField - 1 ):Value := xValue
 		 oRecordSet:Update()
-		 /* ONLY TO DO IF FIELD IN ORDER BY
-		 ADO_RECID(nWa,@nRecNo)
-		 oRecordSet:Requery()
- 		 ADO_GOTO(nWA,nRecNo)
-         */		 
+		 
+		 // ONLY TO DO IF FIELD IN ORDER BY
+		 ADO_ORDINFO( nWA, DBOI_EXPRESSION, aOrderInfo )
+
+		 IF ALLTRIM(oRecordSet:Fields( nField - 1 ):Name) $  aOrderInfo[ UR_ORI_RESULT]
+
+		    ADO_RECID(nWa,@nRecNo)
+		    oRecordSet:Requery()
+ 		    ADO_GOTO(nWA,nRecNo)
+			
+         ENDIF	 
+		 
       ELSE
+	  
 	     RETURN HB_FAILURE
+		 
 	  ENDIF
 	  
    ENDIF
@@ -1664,7 +1686,6 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
    
         IF aWAData[ WA_CONNECTION ]:State != adStateClosed
 		   aOrderInfo[ UR_ORI_RESULT ] := oRecordSet:AbsolutePosition()+1
-           //ADO_RECID( nWA, @aOrderInfo[ UR_ORI_RESULT ] )
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
            nResult := HB_FAILURE
@@ -1933,7 +1954,8 @@ STATIC FUNCTION ADO_ORDLSTADD( nWA, aOrderInfo )
 	   y := ASCAN(aTmpIndx,cIndex)
 	   AADD( aWAData[WA_INDEXES],cIndex)
 	   AADD( aWAData[WA_INDEXEXP],aTmpExp[y])
-       AADD( aWAData[WA_INDEXFOR],"WHERE "+aTmpFor[y])
+	   
+       AADD( aWAData[WA_INDEXFOR],IF(!EMPTY(aTmpFor[y]),"WHERE ","")+aTmpFor[y])
        AADD( aWAData[WA_INDEXUNIQUE],aTmpUnique[y])
 
 	   IF ASCAN( aWAData[WA_INDEXES],cIndex) = 1 //FIRST INDEX GETS CONTROL
@@ -2077,6 +2099,11 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
 		   AADD(aTmpUnique,"")
 		   AADD(aTmpDbfUnique,"")
 		ENDIF
+    ELSE
+	   AADD(aTmpFor,"")
+	   AADD(aTmpDbfFor,"")
+	   AADD(aTmpUnique,"")
+       AADD(aTmpDbfUnique,"")
 	ENDIF
 	
     aOrderInfo [UR_ORI_BAG ] := cIndex
@@ -2569,14 +2596,12 @@ STATIC FUNCTION ADOSEEKSQLFIND( nWA, lSoftSeek, cKey, lFindLast )
    IF lSoftSeek
       
    ENDIF
-   IF aWAData[WA_TABLENAME] = "REGPAGA"
-     MSGINFO("ADOSEEK "+ASEEK[2])
-   ENDIF	 
+
    cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData,.F.,IF(aSeek[3],aseek[1],aSeek[2] ))
 
    oRs:CursorType :=   adOpenDynamic 
-   oRs:CursorLocation := adUseServer 
-   oRs:LockType :=    adLockPessimistic 
+   oRs:CursorLocation := IF(aWAData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseServer) //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
+   oRs:LockType :=    IF(aWAData[ WA_ENGINE ] = "ACCESS", adLockOptimistic, adLockPessimistic)   
   
    oRs:Open(cSql,aWAData[ WA_CONNECTION ] )
   
@@ -3069,7 +3094,19 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo )
   LOCAL cUserName  := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 5, ";" )
   LOCAL cPassword  := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 6, ";" )
   LOCAL oError, cSql, cSql2, lAddAutoInc := .F.
+  LOCAL oCatalog ,ocn  
   
+ IF EMPTY(cDbEngine) //IF NOT DEFINED USE DEFAULT
+    ADODEFAULTS()
+ ENDIF
+ 
+ IF t_cEngine = "ACCESS" //t_cEngine WITH DEFAULT VALUE BU ADODEFAULTS
+    IF !FILE(cDataBase)
+	   oCatalog    := TOleAuto():New( "ADOX.Catalog" )
+	   oCatalog:Create( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDataBase )
+	ENDIF 
+ ENDIF
+
  TRY
  
     //cSql :=  FW_AdoCreateTableSQL( cTableName, aWAData[ WA_SQLSTRUCT ], oConnection, .T. )
@@ -3084,10 +3121,11 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo )
    ADOCONNECT(nWA,aOpenInfo)
    
    cSql := ADOSTRUCTTOSQL( aWAData,aWAData[ WA_SQLSTRUCT ],@lAddAutoInc )
-   
+
    IF Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
       aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
    ENDIF
+   
    
    TRY
    
@@ -3166,7 +3204,7 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
 
    FOR nCol := 1 TO LEN( aStruct )
 	  
-	   cSql  += ' ' + Trim( aStruct[nCol,1 ] )
+	   cSql  += ' ' + ADOQUOTEDCOLSQL( Trim( aStruct[nCol, 1 ] ), dbEngine)
 
        IF LEN( aStruct[ nCol,2 ] ) > 1
           cSql     += Trim( aStruct[ nCol,2 ] ) + ' '
@@ -3274,6 +3312,38 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
 
   RETURN cSql  
 
+STATIC FUNCTION ADOQUOTEDCOLSQL( cCol, dbEngine)  
+  cCol  := ADOUNQUOTE( cCol )
+
+  DO CASE 
+
+  CASE dbEngine = "ACCESS"
+    cCol     := '[' + cCol + ']'
+  CASE dbEngine = "MSSQL"
+  CASE dbEngine = "DBASE"
+	 cCol     := '[' + cCol + ']'
+  CASE dbEngine = "SQLITE"
+	 cCol     := '"' + cCol + '"'
+  CASE dbEngine = "MYSQL"
+  CASE dbEngine = "FOXPRO"
+	 cCol     := '`' + cCol + '`'
+  CASE dbEngine = "ORACLE"
+       cCol     := STRTRAN( cCol, ' ', '_' )
+  CASE dbEngine = "POSTGRE"
+	 cCol     := STRTRAN( cCol, ' ', '_' )
+  ENDCASE
+
+  RETURN cCol
+
+
+STATIC FUNCTION ADOUNQUOTE( cCol )
+
+  cCol    := ALLTRIM( cCol)
+  if VALTYPE( cCol ) == 'C' .AND. LEFT( cCol, 1 ) $ '[`"'
+     cCol    := ALLTRIM( SUBSTR( cCol, 2, LEN( cCol ) - 2 ) )
+  endif
+
+  RETURN cCol
   
 STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
 
@@ -3712,7 +3782,8 @@ LOCAL aInfo,nRelArea,cExpRel
       cordfor := strtran(cordfor,upper((cAliasCorr)->(fieldname(n))),;
 	             upper(cTableName+"."+(cAliasCorr)->(fieldname(n))))
 	  //PARA EVITAR QUE PRIO EXEMPLO DATAGUIA SEJA SUBSTITUIDA POR GUIA FICANDO DATAALIAS.GUIA
-	  if substr(cfiltro,at(alltrim(upper((cAliasCorr)->(fieldname(n)))),cfiltro)-1,1) in " (),.##%$=<>"			 
+	  //26.4.15 CHANGED IN BY $
+	  if substr(cfiltro,at(alltrim(upper((cAliasCorr)->(fieldname(n)))),cfiltro)-1,1) $ " (),.##%$=<>"			 
          cfiltro := strtran(cfiltro,alltrim(upper((cAliasCorr)->(fieldname(n)))),;
 	             upper( cTableName+"."+alltrim((cAliasCorr)->(fieldname(n)))))
       endif				 
@@ -4018,7 +4089,7 @@ FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass,lGetThem )
 	  DEFAULT t_cDataSource TO aDefaults[1]
    
    ENDIF
-   
+ 
    RETURN aDefaults
 
    
