@@ -4153,6 +4153,8 @@ STATIC FUNCTION TempRecordSet() //USED IN ADO_SEEK AVOID OVERTIME NEW OBJ RECORD
   
   RETURN oRs
   
+FUNCTION GETADOCONN()//supply app the con object
+  RETURN oConnection
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
