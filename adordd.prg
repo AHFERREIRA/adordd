@@ -182,8 +182,7 @@ ANNOUNCE ADORDD
 #define WA_LASTRELKEY  30//AHF
 #define WA_FILTERACTIVE  31//AHF
 #define WA_FIELDRECNO 32//AHF
-#define WA_LOCATENEXT 33//AHF
-#define WA_SIZE        33
+#define WA_SIZE        32
 
 #define RDD_CONNECTION 1
 #define RDD_CATALOG    2
@@ -233,7 +232,6 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_LASTRELKEY] := NIL
    aWAData[WA_FILTERACTIVE] := NIL
    aWAData[WA_FIELDRECNO] := NIL
-   aWAData[WA_LOCATENEXT] := NIL
    
    USRRDD_AREADATA( nWA, aWAData )
 
@@ -389,10 +387,14 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 		  CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
 		  
 			 aWAData[ WA_CONNECTION ]:Open("Provider=Advantage OLE DB Provider;User ID="+aWAData[ WA_USERNAME ] +;
-					 ";Data Source="+ t_cDataSource +";TableType=ADS_CDX;"+;
+					 ";Data Source="+ t_cDataSource +";TableType=ADS_VFP;"+;
 					 "Advantage Server Type=ADS_LOCAL_SERVER;")
+			 
 			 aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
-
+             IF	UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,3) ) = "TMP" .OR. 	UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,3) ) = "TEMP"
+			    aWAData[ WA_TABLENAME ] := "#"+aWAData[ WA_TABLENAME ]
+             ENDIF
+			 
 			 //OTHE PROVIDERS FOR DBF FOR TRIALS		
 			 // aWAData[ WA_CONNECTION ]:Open("Provider=vfpoledb.1;Data Source="+t_cDataSource+";Collating Sequence=machine;")
 			 // aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource + ";Extended Properties=dBASE IV;User ID=Admin;Password=;" )
@@ -469,7 +471,13 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 	  
   ENDIF
 
-  aWAData[ WA_TABLENAME ] := CFILENOPATH(aWAData[ WA_TABLENAME ] )
+  aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
+  IF aWAData[ WA_ENGINE ] = "ADS"
+     //IF TEMP TABLE SEND IT AS TO PROVIDER
+     IF UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,3) ) = "TMP" .OR. 	UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,4) ) = "TEMP"
+	    aWAData[ WA_TABLENAME ] := "#"+aWAData[ WA_TABLENAME ]
+	 ENDIF	
+  ENDIF
 
    //WE DONT NEED IT ANYMORE REINITIALIZE
   t_cTableName := NIL
@@ -1101,7 +1109,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
          ENDIF
 	  ENDIF
 
-	  IF aFieldInfo[7] == HB_FT_INTEGER .OR.  aFieldInfo[7] ==  HB_FT_DOUBLE
+	  IF aFieldInfo[7] == HB_FT_INTEGER .OR.  aFieldInfo[7] ==  HB_FT_DOUBLE 
 	     IF VALTYPE( xValue ) == "U"
 		    IF aFieldInfo[4] > 0
                xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],0)) )) // ALLTRIM(STR(aFieldInfo[4],0)))
@@ -1137,16 +1145,35 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL nRecNo, aOrderInfo  := ARRAY(UR_ORI_SIZE)
+   LOCAL nRecNo, aOrderInfo  := ARRAY(UR_ORI_SIZE),oError
    
 
    IF ! aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xValue )
  
       //CHECK IF THE FIELD CA BE RW
 	  IF ADO_FIELDSTRUCT( oRecordSet, nField-1 )[6]
-
+	  
+	     IF ADO_FIELDSTRUCT( oRecordSet, nField-1 )[2] = "N"
+		 
+	        IF LEN(CVALTOCHAR(xValue)) > oRecordSet:Fields( nField - 1 ):Precision
+			
+			   oError := ErrorNew()
+               oError:GenCode := EG_DATAWIDTH
+               oError:SubCode := 1021
+			   oError:subSystem := "ADORDD"
+               oError:Description := oRecordSet:Fields( nField - 1 ):Name + hb_langErrMsg( EG_DATAWIDTH )
+               oError:FileName := aWAData[ WA_TABLENAME]
+               oError:OsCode := 0 /* TODO */
+               oError:CanDefault := .T.
+               UR_SUPER_ERROR( nWA, oError )
+               RETURN HB_FAILURE
+			   
+			ENDIF
+			
+	     ENDIF		
+		 
          oRecordSet:Fields( nField - 1 ):Value := xValue
-		 oRecordSet:Update()
+	     oRecordSet:Update()
 		 
 		 // ONLY TO DO IF FIELD IN ORDER BY
 		 ADO_ORDINFO( nWA, DBOI_EXPRESSION, aOrderInfo )
@@ -1224,12 +1251,15 @@ STATIC FUNCTION ADO_FIELDINFO( nWA, nField, nInfoType, uInfo )
 #endif
       CASE nType == HB_FT_TIMESTAMP
          uInfo := "@"
-      CASE nType == HB_FT_LONG
+      CASE nType == HB_FT_INTEGER .OR. nType == HB_FT_DOUBLE //HB_FT_LONG
          uInfo := "N"
-      CASE nType == HB_FT_INTEGER
+/*      CASE nType == HB_FT_INTEGER
          uInfo := "I"
       CASE nType == HB_FT_DOUBLE
          uInfo := "B"
+*/		 
+      CASE nType == HB_FT_AUTOINC		 
+	      uInfo := "+"
       OTHERWISE
          uInfo := "U"
       ENDCASE
@@ -1328,22 +1358,25 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
    ELSEIF ASCAN( { adSingle, adDouble, adCurrency }, nType ) > 0
    
       cType    := 'N' //SHOULDNT BE "B"?
-      nLen     := MIN( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
+	  
+      nLen     := Max( 19, oField:Precision + 2 ) //MIN( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
+	  
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
          nDec  := oField:NumericScale
       ENDIF
+	  
       nDBFFieldType := HB_FT_INTEGER //HB_FT_DOUBLE WICH ONE IS CORRECT?
 	  
    ELSEIF ASCAN( { adDecimal, adNumeric, adVarNumeric }, nType ) > 0
    
       cType    := 'N'
-      nLen     := Min( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
+      nLen     := Max( 19, oField:Precision + 2 )  //Min( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
 	  
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
          nDec  := oField:NumericScale
       ENDIF
 	  
-	  nDBFFieldType := HB_FT_INTEGER //HB_FT_LONG WICH ONE IS CORRECT?
+	  nDBFFieldType :=  HB_FT_INTEGER  //WICH ONE IS CORRECT?HB_FT_LONG
 	  
    ELSEIF ASCAN( { adBSTR, adChar, adVarChar, adLongVarChar, adWChar, adVarWChar, adLongVarWChar }, nType ) > 0
    
@@ -2468,35 +2501,8 @@ STATIC FUNCTION ADO_CLEARFILTER( nWA )
 STATIC FUNCTION ADO_SETLOCATE( nWA, aScopeInfo )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
-   LOCAL n:= 0,nCount := 0 ,z, cStr := UPPER(aWAData[ WA_LOCATEFOR ])
- 
-   //WE NEED TO CERTIFY THAT IF THERE IS MORE THAN 1 FIEDLD IN EXPRESSIO WE GO TO FILTER FIND = ERROR
-   FOR n := 1 TO FCOUNT()
    
-       z := AT(ALLTRIM(FIELDNAME(n)), cStr) 
-	   if z > 0
-	      nCount ++
-	   ENDIF
-	   //TRY THE SAME AGAIN TO CHECK IF THERE ARE MULTIPLE CONDITION WITH SAME FIELD
-	   //FIND CANNOT BE USED!
-	   IF AT(ALLTRIM(FIELDNAME(n)), SUBSTR(cStr,z+LEN(ALLTRIM(FIELDNAME(n)))) ) > 0
-	      nCount ++
-	   ENDIF
-	   
-	   IF nCount > 2
-	      EXIT
-	   ENDIF
-	   
-   NEXT
-
-   IF nCount > 1 //MORE THAN ONE FIELD WE CANT USE :FIND WE MUST USE SELECT FROM
-      aScopeInfo[ UR_SI_CFOR ] := Filter2Sql( nWA, aWAData[WA_TABLENAME], aWAData[ WA_LOCATEFOR ] )
-   ELSE
-      aScopeInfo[ UR_SI_CFOR ] := SqlTranslate(aWAData[ WA_LOCATEFOR ])
-   ENDIF
-
    aWAData[ WA_SCOPEINFO ] := aScopeInfo
-   aWAData[ WA_LOCATENEXT] := 0
 
    RETURN HB_SUCCESS
    
@@ -2505,59 +2511,30 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL n:= 0,nCount := 0,cStr := UPPER(aWAData[ WA_SCOPEINFO ][ UR_SI_CFOR ]),z :=0
-   LOCAL cSql := aWAData[ WA_SCOPEINFO ][ UR_SI_CFOR ], nRecord := 0,ors
-   
-   //WE NEED TO CERTIFY THAT IF THERE IS MORE THAN 1 FIEDLD IN EXPRESSIO WE GO TO FILTER FIND = ERROR
-   FOR n := 1 TO FCOUNT()
-   
-       z := AT(ALLTRIM(FIELDNAME(n)), cStr) 
-	   if z > 0
-	      nCount ++
-	   ENDIF
-	   //TRY THE SAME AGAIN TO CHECK IF THERE ARE MULTIPLE CONDITION WITH SAME FIELD
-	   //FIND CANNOT BE USED!
-	   IF AT(ALLTRIM(FIELDNAME(n)), SUBSTR(cStr,z+LEN(ALLTRIM(FIELDNAME(n)))) ) > 0
-	      nCount ++
-	   ENDIF
-	   
-	   IF nCount > 2
-	      EXIT
-	   ENDIF
-	   
-   NEXT
-   
-   IF nCount < 2 //ONLY ONE FIELD OK
 
-      oRecordSet:Find( aWAData[ WA_SCOPEINFO ][ UR_SI_CFOR ], iif( lContinue, 1, 0 ) )
-	  
-	  aWAData[ WA_FOUND ] := ! oRecordSet:EOF
-      aWAData[ WA_EOF ] := oRecordSet:EOF
-  
-   ELSE //MRE THAN 1 FIELD FIND DOESNT SUPPORT IT LETS GO TO SELECT IT
    
-      ors := TOleAuto():New( "ADODB.Recordset" )
-	  
-	  IF !lContinue
-	  
-	     aWAData[ WA_LOCATENEXT] := 1
-         cSql := STRTRAN(cSql,"SELECT ","SELECT TOP 1") 
-		 
-         
-         oRs:Open( cSql ,aWAData[ WA_CONNECTION ] )
-		 
-	  ELSE
-	  
-	     aWAData[ WA_LOCATENEXT]++
-	     cSql := STRTRAN(cSql,"SELECT ","SELECT TOP "+STR(aWAData[ WA_LOCATENEXT])) 
-		 
-		 oRs:Open( cSql ,aWAData[ WA_CONNECTION ] )
-		 
-	  ENDIF
-	  
-      ADOFINDREC(nWA,aWAdata,oRs,oRecordSet,lContinue)		 
-	  
+   IF ADOEMPTYSET(oRecordSet)
+      RETURN HB_FAILURE
    ENDIF
+ 
+   IF !lContinue 
+      oRecordSet:MoveFirst() //START FROM BEGINING
+   ELSE
+      oRecordSet:MoveNext() //WE DONT WNAT TO FIND THIS ONE AGAIN
+   ENDIF
+   
+   DO WHILE !oRecordSet:EoF()
+      IF EVAL( aWAData[ WA_SCOPEINFO ][ UR_SI_BFOR ])
+	     aWAData[ WA_FOUND ] := .T.
+	     EXIT
+	  ENDIF	 
+      oRecordSet:MoveNext()
+   ENDDO
+
+    
+   aWAData[ WA_FOUND ] := ! oRecordSet:EOF
+   aWAData[ WA_EOF ] := oRecordSet:EOF
+  
    
    RETURN HB_SUCCESS
    
@@ -3093,83 +3070,86 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo )
   LOCAL cServer    := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 4, ";" )
   LOCAL cUserName  := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 5, ";" )
   LOCAL cPassword  := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 6, ";" )
-  LOCAL oError, cSql, cSql2, lAddAutoInc := .F.
-  LOCAL oCatalog ,ocn  
-  
- IF EMPTY(cDbEngine) //IF NOT DEFINED USE DEFAULT
-    ADODEFAULTS()
- ENDIF
+  LOCAL cSql, cSql2, lAddAutoInc := .F.
+  LOCAL oCatalog , cMarkTmp
  
- IF t_cEngine = "ACCESS" //t_cEngine WITH DEFAULT VALUE BU ADODEFAULTS
-    IF !FILE(cDataBase)
-	   oCatalog    := TOleAuto():New( "ADOX.Catalog" )
-	   oCatalog:Create( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDataBase )
-	ENDIF 
- ENDIF
-
- TRY
- 
-    //cSql :=  FW_AdoCreateTableSQL( cTableName, aWAData[ WA_SQLSTRUCT ], oConnection, .T. )
-    //oConnection:Execute( cSql )
-	MSGINFO("Uncomment FW_AdoCreateTableSQL in ADO_CREATE in adordd.prg if you have the adofuncs.prg"+;
-            " and want to use it instead! or comment this message")
-    BREAK			
-	
- CATCH	
-   aOpenInfo[ UR_OI_NAME ] := hb_tokenGet( aOpenInfo[ UR_OI_NAME ], 2, ";" )
-   
-   ADOCONNECT(nWA,aOpenInfo)
-   
-   cSql := ADOSTRUCTTOSQL( aWAData,aWAData[ WA_SQLSTRUCT ],@lAddAutoInc )
-
-   IF Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
-      aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
+   IF EMPTY(cDbEngine) //IF NOT DEFINED USE DEFAULT
+      ADODEFAULTS()
    ENDIF
    
+   IF( ALLTRIM( cDataBase ) = "" ,cDataBase:= t_cDataSource, cDataBase ) 
+   IF( ALLTRIM( cTable ) = "" , cTable := aOpenInfo[ UR_OI_NAME ] ,cTable)
+   IF( ALLTRIM( cDbEngine ) = "" ,cDbEngine:= t_cEngine, cDbEngine )
+   IF( ALLTRIM( cServer ) = "" , cServer:= t_cServer, cServer )
+   IF( ALLTRIM( cUserName ) = "" , cUserName:= t_cUserName, cUserName )
+   IF( ALLTRIM( cPassword ) = "" , cPassword:= t_cPassword, cPassword )
    
+   IF cDbEngine = "ACCESS" //t_cEngine WITH DEFAULT VALUE BU ADODEFAULTS
+      IF !FILE(cDataBase)
+	     oCatalog    := TOleAuto():New( "ADOX.Catalog" )
+	     oCatalog:Create( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDataBase )
+	  ENDIF 
+   ENDIF
+
    TRY
+ 
+      //cSql :=  FW_AdoCreateTableSQL( cTableName, aWAData[ WA_SQLSTRUCT ], oConnection, .T. )
+      //oConnection:Execute( cSql )
+	  MSGINFO("Uncomment FW_AdoCreateTableSQL in ADO_CREATE in adordd.prg if you have the adofuncs.prg"+;
+              " and want to use it instead! or comment this message")
+      BREAK			
+	
+   CATCH	
+ 
+      aOpenInfo[ UR_OI_NAME ] := CFILENOEXT( CFILENOPATH( cTable ) )
+
+      ADOCONNECT(nWA,aOpenInfo)
    
-	 cSql := "CREATE TABLE " +  aWAData[ WA_TABLENAME ]  + " ( " + cSql + " )"
+      cSql := ADOSTRUCTTOSQL( aWAData,aWAData[ WA_SQLSTRUCT ],@lAddAutoInc )
 
-	 IF aWAData[ WA_ENGINE ] = "ORACLE" .AND. lAddAutoInc
-		cSql2    := "CREATE SEQUENCE " + aWAData[ WA_TABLENAME ] + "_ID_SEQ"
-		cSql     += "|" + cSql2
-		cSql2    := "CREATE OR REPLACE TRIGGER " + aWAData[ WA_TABLENAME ] +;
-		            "_BI_TRG BEFORE INSERT ON " + aWAData[ WA_TABLENAME ]
-		cSql2    += " FOR EACH ROW BEGIN "
-		cSql2    += " SELECT " + aWAData[ WA_TABLENAME ] + "_ID_SEQ.nextval INTO :new.id FROM DUAL; END;"
-		cSql     += "|" + cSql2
-	 ENDIF
-	 
-     IF '|' $ cSql
-        AEVAL( HB_ATokens( cSql, '|' ), { |c| aWAData[ WA_CONNECTION ]:Execute( c ) } )
-     ELSE
-        aWAData[ WA_CONNECTION ]:Execute( cSql )
-     ENDIF
-	 
-	 MEMOWRIT( "creatsql.txt", cSql )
-	  
-   CATCH //modified by LucasDeBeltran 
+      IF Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
+         aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
+      ENDIF
    
-      //INFORM ADOERROR
-      ADOSHOWERROR( aWAData[ WA_CONNECTION ] )
-	  //THROW APP CREATE ERROR
-      oError := ErrorNew()
-      oError:GenCode := EG_CREATE
-      oError:SubCode := 1004
-      oError:Description := hb_langErrMsg( EG_CREATE ) + " (" + ;
-         hb_langErrMsg( EG_UNSUPPORTED ) + ")"
-      oError:FileName := aOpenInfo[ UR_OI_NAME ]
-      oError:CanDefault := .T.
+   
+      TRY
+	    //TEMPORARY TABLES ARE DESTROYE AUTO WHEN NO NEEDED ANYMORE
+        IF UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,4 ) ) = "TEMP"
+           cMarkTmp := ADOTEMPTABLE( cDbEngine )
+		   //we need to create the file in order to eventually test file() works in the app
+		   MEMOWRIT(cTable,"nada")
+		ELSE
+           cMarkTmp	:= "TABLE "
+        ENDIF
+		
+	    cSql := "CREATE "+cMarkTmp+  aWAData[ WA_TABLENAME ]  + " ( " + cSql + " )"
 
-      FOR n := 0 TO aWAData[ WA_CONNECTION ]:Errors:Count - 1
-         oError:Description += aWAData[ WA_CONNECTION ]:Errors( n ):Description
-      NEXT
-
-      UR_SUPER_ERROR( nWA, oError )
+        //ORACLE NO AUTOINC ONLY SEQUENCE AS IT SHOULD BE FOR ALL
+	    IF aWAData[ WA_ENGINE ] = "ORACLE" .AND. lAddAutoInc
+		   cSql2    := "CREATE SEQUENCE " + aWAData[ WA_TABLENAME ] + "_ID_SEQ"
+		   cSql     += "|" + cSql2
+		   cSql2    := "CREATE OR REPLACE TRIGGER " + aWAData[ WA_TABLENAME ] +;
+		               "_BI_TRG BEFORE INSERT ON " + aWAData[ WA_TABLENAME ]
+		   cSql2    += " FOR EACH ROW BEGIN "
+		   cSql2    += " SELECT " + aWAData[ WA_TABLENAME ] + "_ID_SEQ.nextval INTO :new.id FROM DUAL; END;"
+		   cSql     += "|" + cSql2
+	    ENDIF
+	 
+        IF '|' $ cSql
+           AEVAL( HB_ATokens( cSql, '|' ), { |c| aWAData[ WA_CONNECTION ]:Execute( c ) } )
+        ELSE
+           aWAData[ WA_CONNECTION ]:Execute( cSql )
+        ENDIF
+	 
+	    MEMOWRIT( "creatsql.txt", cSql )
 	  
+      CATCH //modified by LucasDeBeltran 
+   
+         //INFORM ADOERROR
+         ADOSHOWERROR( aWAData[ WA_CONNECTION ] )
+	  
+      END
    END
- END
  
    RETURN HB_SUCCESS
    
@@ -3214,7 +3194,9 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
 		     lAddAutoInc := .T.
              cSql  += { "", " AUTOINCREMENT", " INT IDENTITY( 1, 1 )", " INT AUTO_INCREMENT",;
                         " INT", " INTEGER"," NUMERIC"," SERIAL"," SERIAL",  " INTEGER IDENTITY", " AUTOINC" }[ snDbms ]
-             cSql  += " PRIMARY KEY"
+			 IF dbEngine <> "ADS"
+                cSql  += " PRIMARY KEY"
+			 ENDIF	
           CASE aStruct[ nCol,2 ] = '='
              cSql  += { "", " DATETIME NOT NULL DEFAULT Now()", " DATETIME NOT NULL DEFAULT (GetDate())", ;
                         " TIMESTAMP DEFAULT CURRENT_TIMESTAMP", " DATE DEFAULT SysDate", ;
@@ -3299,7 +3281,7 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
 			 
          OTHERWISE
 		 
-            cSql  += " CHAR(1)"
+            cSql  += " CHAR(1) "+aStruct[ nCol,2 ]
 			
          ENDCASE
       ENDIF
@@ -3344,6 +3326,34 @@ STATIC FUNCTION ADOUNQUOTE( cCol )
   endif
 
   RETURN cCol
+
+FUNCTION ADOTEMPTABLE(DbEngine)
+ LOCAL cMark := ""
+ 
+  DO CASE 
+
+  CASE dbEngine = "ADS"
+     cMark := "TABLE #"
+  CASE dbEngine = "ACCESS"
+     cMark     := "TABLE "
+  CASE dbEngine = "MSSQL"
+     cMark := "TABEL #"
+  CASE dbEngine = "DBASE"
+	 cMark     := "TABLE "
+  CASE dbEngine = "SQLITE"
+	 cMark    := "TEMPORARY TABLE "
+  CASE dbEngine = "MYSQL"
+     cMark :=  "TEMPORARY TABLE "
+  CASE dbEngine = "FOXPRO"
+	 cMark     := "TABLE "
+  CASE dbEngine = "ORACLE"
+     cMark     := "GLOBAL TEMPORARY TABLE"
+  CASE dbEngine = "POSTGRE"
+	 cMark     := "TEMPORARY TABLE "
+  ENDCASE
+ 
+  RETURN cMark
+
   
 STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
 
