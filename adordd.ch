@@ -233,11 +233,13 @@
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
 
+/*
 #command LOCATE [FOR <for>] [WHILE <while>] [NEXT <next>] ;
                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
          [ hb_adoSetLocateFor( <(for)> ); ] ;
          __dbLocate( <{for}>, <{while}>, <next>, <rec>, <.rest.> )
-		 
+*/
+	 
 /* sets for adordd */
 #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
