@@ -233,7 +233,7 @@
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
 
-/*
+/* WE DONT NEED IT ANYMORE (FOR NOW)
 #command LOCATE [FOR <for>] [WHILE <while>] [NEXT <next>] ;
                 [RECORD <rec>] [<rest:REST>] [ALL] => ;
          [ hb_adoSetLocateFor( <(for)> ); ] ;
@@ -248,7 +248,8 @@
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
 #command SET ADO DEFAULT DATABASE TO <cDB> [SERVER TO <cServer>] ENGINE TO <cEngine> [USER TO <cUser>];
   [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
-  
+#command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */  
+
 /*		 TODO
 
 #command CREATE <(db)> [FROM <(src)>] [VIA <rdd>] [ALIAS <a>] ;
@@ -256,8 +257,6 @@
          __dbCreate( <(db)>, <(src)>, <rdd>, <.new.>, <(a)>, <cp>, <conn>)
 
 #command COPY [STRUCTURE] [EXTENDED] [TO <(f)>] => __dbCopyXStruct( <(f)> )
-#command COPY [STRUCTURE] [TO <(f)>] [FIELDS <fields,...>] => ;
-         __dbCopyStruct( <(f)>, { <(fields)> } )
 
 #command COPY [TO <(f)>] [FIELDS <fields,...>] ;
               [FOR <for>] [WHILE <while>] [NEXT <next>] ;
