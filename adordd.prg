@@ -923,7 +923,9 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    LOCAL aStruct, cBaseTable, n, oField, u
    LOCAL aCols := {}, aVals := {}
    LOCAL lAdded   := .f.,nRecNo
-
+   LOCAL aLockInfo := ARRAY(UR_LI_SIZE)
+   
+   
 	aStruct := ADOSTRUCT( oRs )
 	FOR n := 1 TO LEN( aStruct )
         IF aStruct[ n, 6 ]
@@ -935,8 +937,23 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 	
     IF ! EMPTY( aCols )
 
-      TRY
- 
+       TRY
+	  
+         aLockInfo[ UR_LI_RECORD ] := ADORECCOUNT(nWA,oRs)+1 //GHOST NEXT RECORD
+		 aLockInfo[ UR_LI_METHOD ] := DBLM_MULTIPLE
+		 aLockInfo[ UR_LI_RESULT ] := .F.
+		
+         IF lUnlockAll
+            ADO_UNLOCK(nWA)
+         ENDIF	
+		 
+         ADO_LOCK( nWA, aLockInfo )
+		 
+		 IF !aLockInfo[ UR_LI_RESULT ]
+		    NETERR(.T.)
+			lAdded := .F.
+		 ENDIF
+		 
          oRs:AddNew( aCols, aVals )
 		 oRs:Update()
 		 
@@ -945,13 +962,8 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 		 
          lAdded   := .t.
 		 NETERR(.F.)	
- 
-         IF lUnlockAll
-            ADO_UNLOCK(nWA)
-         ENDIF	
 	 
 		 ADO_RECID( nWA, @nRecNo )
-         AADD(aWdata[ WA_LOCKLIST ],nRecNo) 
 		 
     CATCH
 	
@@ -1105,7 +1117,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 	  
 	  IF aFieldInfo[7] == HB_FT_DATE
 	     IF VALTYPE( xValue ) == "U"
-            xValue := CTOD("  /  /  ") //SToD()
+            xValue := CTOD("  /  /  ")
          ENDIF
 	  ENDIF
 
@@ -1132,7 +1144,11 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_TIMESTAMP 
-	     // xValue := what is the defaut type for this?
+	    /* IF VALTYPE( xValue ) == "U"
+            xValue := DTOT() 
+	     ELSE
+            DTOT(xValue)		 
+         ENDIF*/
 	  ENDIF
 	  
    ENDIF	  
@@ -1182,7 +1198,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
 		    ADO_RECID(nWa,@nRecNo)
 		    oRecordSet:Requery()
- 		    ADO_GOTO(nWA,nRecNo)
+		    ADO_GOTO(nWA,nRecNo)
 			
          ENDIF	 
 		 
@@ -1891,8 +1907,11 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
    ENDIF
    
    IF aOrderInfo[ UR_ORI_TAG ] <> NIL
-   
+      //TRY
       oRecordSet:Close()
+	  //CATCH
+	   // ADOSHOWERROR(aWAData[ WA_CONNECTION ])
+	  // END	
 	  /* AHF NOT NEEDED ONLY IF YOU WANT TO CHANGE IT OTHERWISE STAYS AS IT WAS WHEN OPENING IT
       oRecordSet:CursorType := adOpenDynamic
       oRecordSet:CursorLocation := adUseServer //adUseClient never use ths very slow!
@@ -2311,6 +2330,7 @@ STATIC FUNCTION ADO_RAWLOCK( nWA, nAction, nRecNo )
 STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 
    LOCAL aWdata := USRRDD_AREADATA( nWA ),n
+   LOCAL oRs := aWdata[ WA_RECORDSET ]
    
    HB_SYMBOL_UNUSED( nWA )
    
@@ -2324,12 +2344,18 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
    DBLM_MULTIPLE 2 LOCK CURRENT AND ADD TO LOCKLIST
    DBLM_FILE 3 RELEASE ALL LOCKS AND FILE LOCK 
    */
+   IF EMPTY(aLockInfo[ UR_LI_RECORD ])
+      aLockInfo[ UR_LI_RECORD ] := RECNO()
+   ENDIF	  
+   
+   IF !ADO_GETLOCK(aWdata[WA_TABLENAME],IF( aLockInfo[UR_LI_METHOD] = DBLM_FILE,"ZWTXFL",aLockInfo[ UR_LI_RECORD ]) )
+      RETURN HB_FAILURE
+   ENDIF
    
    IF aLockInfo[UR_LI_METHOD] = DBLM_FILE
       aLockInfo[ UR_LI_RESULT ] := .T.
 	  aWdata[ WA_FILELOCK ] := .T.
    ELSE
-      aLockInfo[ UR_LI_RECORD ] := RecNo()
       aLockInfo[ UR_LI_RESULT ] := .T.
       AADD(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ])
 	ENDIF  
@@ -2342,9 +2368,12 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
 
    LOCAL aWdata := USRRDD_AREADATA( nWA ),n
-
+   LOCAL oRs := aWdata[ WA_RECORDSET ]
+   
    HB_SYMBOL_UNUSED( xRecId )
    HB_SYMBOL_UNUSED( nWA )
+   
+   ADO_GETUNLOCK(aWdata[ WA_TABLENAME],xRecID)   
    
    IF !EMPTY(xRecID)
       n := ASCAN(aWdata[ WA_LOCKLIST ],xRecID)
@@ -2357,6 +2386,84 @@ STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
    ENDIF   
    
    RETURN HB_SUCCESS
+   
+   
+STATIC FUNCTION ADO_GETLOCK(cTable,xRecID)   
+ LOCAL lRetval := .F.
+ LOCAL aLockCtrl :=  ADOLOCKCONTROL()
+ LOCAL currArea := SELECT()
+ 
+  xRecID := ALLTRIM(CVALTOCHAR(xRecID))
+  
+  IF SELECT("TLOCKS") = 0
+     DBUSEAREA(.T.,aLockCtrl[2],aLockCtrl[1]+".DBF","TLOCKS",.T.)
+     TLOCKS->(DBSETINDEX(aLockCtrl[1]+".CDX"))	 
+	 SELECT(currArea)
+  ENDIF
+    
+  IF TLOCKS->(DBSEEK( cTable + xRecID ))
+  
+     IF TLOCKS->(DBRLOCK( IF( !EMPTY(xRecID), TLOCKS->(RECNO()), NIL) ) )
+	    lRetval := .T.
+	 ENDIF	
+	 
+  ELSE
+  
+     IF !TLOCKS->(DBSEEK(SPACE(50))) //RECOVERING USED RECORDS
+	 
+        TLOCKS->(DBAPPEND( IF( !EMPTY(xRecID), .F., .T.) ))
+		IF !NETERR()
+		   lRetval := .T.
+		ENDIF   
+		
+     ELSE
+	 
+        IF TLOCKS->(DBRLOCK( IF( !EMPTY(xRecID), TLOCKS->(RECNO()), NIL ) ))
+	       lRetval := .T.
+		   REPLACE TLOCKS->CODLOCK WITH cTable+xRecID
+	    ENDIF	
+		
+	 ENDIF	
+	 
+  ENDIF
+
+  
+  RETURN lRetval
+  
+
+STATIC FUNCTION ADO_GETUNLOCK(cTable,xRecID)   
+ LOCAL aLockCtrl :=  ADOLOCKCONTROL()
+ LOCAL currArea := SELECT()
+ 
+  xRecID := ALLTRIM(CVALTOCHAR(xRecID)) 
+  
+  IF SELECT("TLOCKS") = 0
+     DBUSEAREA(.T.,aLockCtrl[2],aLockCtrl[1]+".DBF","TLOCKS",.T.)
+     TLOCKS->(DBSETINDEX(aLockCtrl[1]+".CDX"))	 
+	 SELECT(currArea)	 
+  ENDIF
+   
+  IF !EMPTY(xRecID)   
+  
+     IF TLOCKS->( DBSEEK( cTable + xRecID ) )
+	 
+        IF TLOCKS->(ISLOCKED())
+	       REPLACE TLOCKS->CODLOCK WITH SPACE(50) //NOT TO GROW IT WILL BE RECYCLED NEXT TIME
+	    ENDIF	
+        TLOCKS->(DBRUNLOCK(TLOCKS->(RECNO())))
+		
+	 ENDIF
+	 
+  ELSE
+  
+      TLOCKS->(DBRUNLOCK())  
+	  
+  ENDIF
+
+  
+  RETURN HB_SUCCESS
+  
+   
 /*                              END LOCKS RELATED FUNCTIONS */   
 
 /*                                             TRANSACTION RELATED FUNCTIONS */
@@ -2578,7 +2685,7 @@ STATIC FUNCTION ADOSEEKSQLFIND( nWA, lSoftSeek, cKey, lFindLast )
 
    oRs:CursorType :=   adOpenDynamic 
    oRs:CursorLocation := IF(aWAData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseServer) //adUseServer  // adUseClient its slower but has avntages such always bookmaks 
-   oRs:LockType :=    IF(aWAData[ WA_ENGINE ] = "ACCESS", adLockOptimistic, adLockPessimistic)   
+   oRs:LockType := IF(aWAData[ WA_ENGINE ] = "ACCESS", adLockOptimistic, adLockPessimistic)   
   
    oRs:Open(cSql,aWAData[ WA_CONNECTION ] )
   
@@ -4165,10 +4272,54 @@ STATIC FUNCTION TempRecordSet() //USED IN ADO_SEEK AVOID OVERTIME NEW OBJ RECORD
   
 FUNCTION GETADOCONN()//supply app the con object
   RETURN oConnection
+
+//ceate table for record lock control
+FUNCTION ADOLOCKCONTROL(cPath,cRdd)
+ STATIC cFile,rRdd
+ 
+ LOCAL lRetVal := .F.
+ LOCAL cTable 
+ LOCAL cIndex 
+  
+  DEFAULT cRdd TO "DBFCDX"
+  
+  IF !EMPTY(cRdd)
+     rRdd := cRdd
+  ENDIF	 
+  IF !EMPTY(cPath)
+     cFile := cPath+"\TLOCKS"
+  ELSE
+     RETURN {cFile,rRdd}
+  ENDIF	 
+  
+  cTable := cPath+"\TLOCKS.DBF"
+  cIndex := cPath+"\TLOCKS.CDX"
+  
+  TRY
+  
+      IF !FILE(cTable)
+	  
+         DBCREATE(cTable,;
+		 { {"CODLOCK","C",50,0 }},;
+		 "DBFCDX",.T.,"TLOCKS")
+         INDEX ON CODLOCK TO (cIndex)
+		 
+      ENDIF
+	  
+	  lRetVal := .T.
+	  
+  CATCH
+  
+      lRetVal := .F.
+  END
+
+ 
+  RETURN lRetVal
+  
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.240415/1"
+RETURN "AdoRdd Version 1.290415/1"
 
 /*                   END ADO SET GET FUNCTONS */
    
