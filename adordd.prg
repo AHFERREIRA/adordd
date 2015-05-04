@@ -182,7 +182,8 @@ ANNOUNCE ADORDD
 #define WA_LASTRELKEY  30//AHF
 #define WA_FILTERACTIVE  31//AHF
 #define WA_FIELDRECNO 32//AHF
-#define WA_SIZE        32
+#define WA_TLOCKS 33//AHF
+#define WA_SIZE        33
 
 #define RDD_CONNECTION 1
 #define RDD_CATALOG    2
@@ -223,7 +224,7 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_LOCKLIST] := {}
    aWAData[WA_FILELOCK] := .F.
    aWAData[WA_INDEXUNIQUE] := {}
-   aWAData[WA_OPENSHARED] := .T.
+   aWAData[WA_OPENSHARED] := NIL
    aWAData[WA_SCOPES] := {}
    aWAData[WA_SCOPETOP] := {}
    aWAData[WA_SCOPEBOT] := {}
@@ -232,6 +233,8 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_LASTRELKEY] := NIL
    aWAData[WA_FILTERACTIVE] := NIL
    aWAData[WA_FIELDRECNO] := NIL
+   aWAData[WA_SCOPEINFO] := NIL
+   aWAData[WA_TLOCKS] := {}
    
    USRRDD_AREADATA( nWA, aWAData )
 
@@ -243,14 +246,61 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL cName, aField, oError, nResult
    LOCAL oRecordSet, nTotalFields, n
-      
+   LOCAL aLockInfo := ARRAY(UR_LI_SIZE)      
+   
    /* When there is no ALIAS we will create new one using file name */
    IF Empty( aOpenInfo[ UR_OI_ALIAS ] )
       hb_FNameSplit( aOpenInfo[ UR_OI_NAME ],, @cName )
       aOpenInfo[ UR_OI_ALIAS ] := cName
    ENDIF
-
+   
    ADOCONNECT(nWA,aOpenInfo)
+   
+   //OPEN EXCLUSIVE 
+   IF !aOpenInfo[ UR_OI_SHARED ]
+   
+       aLockInfo[ UR_LI_METHOD ] := DBLM_EXCLUSIVE
+	   
+	   aLockInfo[ UR_LI_RESULT ] := .F.
+       ADO_LOCK( nWA, aLockInfo )	 
+
+       IF !aLockInfo[ UR_LI_RESULT ]
+
+          oError := ErrorNew()
+          oError:GenCode := EG_OPEN
+          oError:SubCode := 1001
+          oError:Description := hb_langErrMsg( EG_OPEN )
+          oError:FileName := aOpenInfo[ UR_OI_NAME ]
+          oError:OsCode := 0 // TODO 
+          oError:CanDefault := .T.
+		  NETERR(.T.)
+          UR_SUPER_ERROR( nWA, oError )
+          RETURN HB_FAILURE		  
+		  
+	   ENDIF
+	   
+   ELSE
+      
+	  IF ADO_OPENSHARED( nWA,aWAData[WA_TABLENAME])
+	  
+         aWAData[WA_OPENSHARED] := .T.
+		 
+	  ELSE
+	  
+         oError := ErrorNew()
+         oError:GenCode := EG_OPEN
+         oError:SubCode := 1001
+         oError:Description := hb_langErrMsg( EG_OPEN )
+         oError:FileName := aOpenInfo[ UR_OI_NAME ]
+         oError:OsCode := 0 // TODO 
+         oError:CanDefault := .T.
+	     NETERR(.T.)
+         UR_SUPER_ERROR( nWA, oError )
+         RETURN HB_FAILURE		  
+
+	  ENDIF
+	  
+   ENDIF	   
 
    oRecordSet :=  TOleAuto():New( "ADODB.Recordset" )
 
@@ -278,11 +328,11 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    ENDIF	  
 
    //PROPERIES AFFECTING PERFORMANCE TRY
-   //oRecordSet:MaxRecords := 10
-   //oRecordSet:CacheSize := 25 //records increase performance set zero returns error set great server parameters max open rows error
+   //oRecordSet:MaxRecords := 60
+   //oRecordSet:CacheSize := 50 //records increase performance set zero returns error set great server parameters max open rows error
    //oRecordset:PageSize = 10
    //oRecordSet:MaxRecords := 15
-   //oRecordset:Property("Maximum Open Rows") = 15
+   //oRecordset:Properties("Maximum Open Rows") := 110  //MIN TWICE THE SIZE OF CACHESIZE
    
    IF aWAData[ WA_QUERY ] == "SELECT * FROM "
       oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
@@ -333,11 +383,6 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       ADO_GOTOP( nWA )
    ENDIF
    
-   //OPEN EXCLUSIVE MUST BE WITHIN A TRANSACTION!
-   IF !aWAData[ WA_OPENSHARED ] 
-       ADOBEGINTRANS(nWa)	//START TRANSACTION	   
-   ENDIF	   
-   
    //auto open set and auto order
    IF SET(_SET_AUTOPEN)
    
@@ -368,7 +413,6 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 		aWAData[ WA_SERVER ]     := t_cServer
 		aWAData[ WA_ENGINE ]     := t_cEngine
 		aWAData[ WA_CONNOPEN ]   := .T.
-		aWAData[ WA_OPENSHARED ] := aOpenInfo[ UR_OI_SHARED ]
 
 		DO CASE
 		  
@@ -449,7 +493,6 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 		aWAData[ WA_SERVER ]     := t_cServer
 		aWAData[ WA_ENGINE ]     := t_cEngine
 		aWAData[ WA_CONNOPEN ]   := .T.
-		aWAData[ WA_OPENSHARED ] := aOpenInfo[ UR_OI_SHARED ]
 		 
      ENDIF	  
 	  
@@ -467,7 +510,6 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 	 aWAData[ WA_SERVER ]     := t_cServer
 	 aWAData[ WA_ENGINE ]     := t_cEngine
 	 aWAData[ WA_CONNOPEN ]   := .F.
-	 aWAData[ WA_OPENSHARED ] := aOpenInfo[ UR_OI_SHARED ]
 	  
   ENDIF
 
@@ -522,9 +564,27 @@ STATIC FUNCTION ADO_CLOSE( nWA )
       ENDIF
    ENDIF	  
    
-//   DO WHILE oRecordSet:State != adStateClosed ; ENDDO
-   
    oRecordSet := NIL
+   aWAData[ WA_BOF ] := .F.
+   aWAData[ WA_EOF ] := .F.
+   aWAData[WA_INDEXES] := {}
+   aWAData[WA_INDEXEXP] := {}
+   aWAData[WA_INDEXFOR] := {}
+   aWAData[WA_INDEXACTIVE] := 0
+   aWAData[WA_LOCKLIST] := {}
+   aWAData[WA_FILELOCK] := .F.
+   aWAData[WA_INDEXUNIQUE] := {}
+   aWAData[WA_OPENSHARED] := NIL
+   aWAData[WA_SCOPES] := {}
+   aWAData[WA_SCOPETOP] := {}
+   aWAData[WA_SCOPEBOT] := {}
+   aWAData[WA_ISITSUBSET] := .F.
+   aWAData[WA_FOUND] := .F.
+   aWAData[WA_LASTRELKEY] := NIL
+   aWAData[WA_FILTERACTIVE] := NIL
+   aWAData[WA_FIELDRECNO] := NIL
+   aWAData[WA_SCOPEINFO] := NIL
+   ADO_UNLOCK( nWA ) //RELEASE ALL LOCKS IN TLOCKS.DBF
    
    RETURN UR_SUPER_CLOSE( nWA )
    
@@ -923,15 +983,20 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    LOCAL aStruct, cBaseTable, n, oField, u
    LOCAL aCols := {}, aVals := {}
    LOCAL lAdded   := .f.,nRecNo
-   LOCAL aLockInfo := ARRAY(UR_LI_SIZE)
+   LOCAL aLockInfo := ARRAY(UR_LI_SIZE),oError
    
-   
+
 	aStruct := ADOSTRUCT( oRs )
 	FOR n := 1 TO LEN( aStruct )
         IF aStruct[ n, 6 ]
             AADD( aCols, aStruct[ n, 1 ] )
-            AADD( aVals, hb_DeCode( aStruct[ n, 2 ], 'C', SPACE( aStruct[ n, 3 ] ), ;
-               'D', CTOD("  /  /  "), 'L', .f., 'M', SPACE(255), 'N', 0, 'T', "", '' ) )
+            AADD( aVals, HB_DECODE( aStruct[ n, 2 ], 'C', Space( aStruct[ n, 3 ] ), 'D', CToD( '' ), 'L', .f., ;
+                 'M', "", 'm', "", '+', 0, ;
+                 'N', If( aStruct[ n, 3 ] == 0, 0, Val( "0." + Replicate( '0', aStruct[ n, 3 ] ) ) ), ;
+                 'T', CTOT( '' ), '' ) )
+				 
+			//hb_DeCode( aStruct[ n, 2 ], 'C', SPACE( aStruct[ n, 3 ] ), ;
+            //   'D', CTOD("  /  /  "), 'L', .f., 'M', SPACE(255), 'N', 0, 'T', "", '' ) )
          ENDIF
     NEXT
 	
@@ -952,6 +1017,15 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 		 IF !aLockInfo[ UR_LI_RESULT ]
 		    NETERR(.T.)
 			lAdded := .F.
+			oError := ErrorNew()
+            oError:GenCode := EG_APPENDLOCK
+            oError:SubCode := 1024
+            oError:Description := hb_langErrMsg( EG_APPENDLOCK )
+            oError:FileName := aWAData[ WA_TABLENAME]
+            oError:OsCode := 0 /* TODO */
+            oError:CanDefault := .T.
+			UR_SUPER_ERROR( nWA, oError )
+            BREAK
 		 ENDIF
 		 
          oRs:AddNew( aCols, aVals )
@@ -1012,17 +1086,31 @@ STATIC FUNCTION ADO_DELETE( nWA )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-   LOCAL tmp, lDeleted := .F.
+   LOCAL tmp, lDeleted := .F.,nRecNo
 
    IF ADORECCOUNT(nWA,oRecordSet) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
    
       IF !oRecordSet:Eof .AND. !oRecordSet:Bof
 	  
-         tmp = oRecordSet:AbsolutePosition //SAME USED IN ADOFUNCS
-         oRecordSet:Delete()
-		 oRecordSet:Update()
-         oRecordSet:AbsolutePosition := Max( 1, Min( tmp, oRecordSet:RecordCount() ) ) //SAME USED IN ADOFUNCS
-         lDeleted = .T.
+ 		 ADO_RECID(nWa,@nRecNo)
+		 IF ADO_ISLOCKED(aWAData[ WA_TABLENAME],nRecNo, aWAData[ WA_TLOCKS]) 
+		    tmp = oRecordSet:AbsolutePosition //SAME USED IN ADOFUNCS
+            oRecordSet:Delete()
+		    oRecordSet:Update()
+            oRecordSet:AbsolutePosition := Max( 1, Min( tmp, oRecordSet:RecordCount() ) ) //SAME USED IN ADOFUNCS
+            lDeleted = .T.
+		 ELSE
+		    //ERROR UNLOCK
+			oError := ErrorNew()
+            oError:GenCode := EG_UNLOCKED
+            oError:SubCode := 1022
+            oError:Description := hb_langErrMsg( EG_UNLOCKED )
+            oError:FileName := aWAData[ WA_TABLENAME]
+            oError:OsCode := 0 /* TODO */
+            oError:CanDefault := .T.
+			UR_SUPER_ERROR( nWA, oError )
+            RETURN HB_FAILURE
+		 ENDIF
 		 
 	  ENDIF
 	  
@@ -1080,15 +1168,17 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
       ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_DATE
-         xValue := CTOD("  /  /  ") //SToD("  /  /  ")
+         xValue := CTOD('') 
       ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_INTEGER .OR.  aFieldInfo[7] ==  HB_FT_DOUBLE
+	  
 		 IF aFieldInfo[4] > 0
             xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],0)) )) //VAL("0."+ALLTRIM(STR(aFieldInfo[4],0)))
 		 ELSE
-		    xValue := 0
-         ENDIF			
+		    xValue := INT(0)
+         ENDIF	
+		 
       ENDIF
 	  
   	  IF aFieldInfo[7] == HB_FT_MEMO
@@ -1100,7 +1190,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_TIMESTAMP 
-	     // xValue := what is the defaut type for this?
+	     xValue := CTOT('')
 	  ENDIF
 
    ELSE
@@ -1108,47 +1198,72 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
       xValue := rs:Fields( nField - 1 ):Value
 	  
 	  IF aFieldInfo[7] == HB_FT_STRING
+	  
 	     IF VALTYPE( xValue ) == "U"
             xValue := SPACE( rs:Fields( nField - 1 ):DefinedSize )
          ELSE
             xValue := PADR( xValue, rs:Fields( nField - 1 ):DefinedSize )
          ENDIF
+		 
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_DATE
+	  
 	     IF VALTYPE( xValue ) == "U"
-            xValue := CTOD("  /  /  ")
+            xValue := FW_TTOD('') 
+	     ELSE
+ 		    xValue := FW_TTOD( xValue ) 
          ENDIF
+		 
 	  ENDIF
 
 	  IF aFieldInfo[7] == HB_FT_INTEGER .OR.  aFieldInfo[7] ==  HB_FT_DOUBLE 
+	  
 	     IF VALTYPE( xValue ) == "U"
+		 
 		    IF aFieldInfo[4] > 0
                xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],0)) )) // ALLTRIM(STR(aFieldInfo[4],0)))
 			ELSE
-			   xValue := 0
-            ENDIF			
+			   xValue := INT(0)
+            ENDIF	
+			
+         ELSE
+		 
+  		    IF aFieldInfo[4] = 0
+		       xValue := INT(xValue)
+		    ENDIF	
+			
          ENDIF
+	  ENDIF
+	  
+	  IF aFieldInfo[7] == HB_FT_AUTOINC
+	     xValue := INT(xValue)
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_MEMO
+	  
 	     IF VALTYPE( xValue ) == "U"
             xValue := SPACE(0)
          ENDIF
+		 
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_LOGICAL 
+	  
 	     IF VALTYPE( xValue ) == "U"
             xValue := .F.
          ENDIF
+		 
 	  ENDIF
 	  
 	  IF aFieldInfo[7] == HB_FT_TIMESTAMP 
-	    /* IF VALTYPE( xValue ) == "U"
-            xValue := DTOT() 
+	  
+	     IF VALTYPE( xValue ) == "U"
+            xValue := CTOT('')
 	     ELSE
-            DTOT(xValue)		 
-         ENDIF*/
+            xValue := FW_DTOT(xValue)		 
+         ENDIF
+		 
 	  ENDIF
 	  
    ENDIF	  
@@ -1188,8 +1303,22 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 			
 	     ENDIF		
 		 
-         oRecordSet:Fields( nField - 1 ):Value := xValue
-	     oRecordSet:Update()
+		 ADO_RECID(nWa,@nRecNo)
+		 IF ADO_ISLOCKED(aWAData[ WA_TABLENAME],nRecNo, aWAData[ WA_TLOCKS]) 
+            oRecordSet:Fields( nField - 1 ):Value := xValue
+	        oRecordSet:Update()
+		 ELSE
+		    //ERROR UNLOCK
+			oError := ErrorNew()
+            oError:GenCode := EG_UNLOCKED
+            oError:SubCode := 1022
+            oError:Description := hb_langErrMsg( EG_UNLOCKED )
+            oError:FileName := aWAData[ WA_TABLENAME]
+            oError:OsCode := 0 /* TODO */
+            oError:CanDefault := .T.
+			UR_SUPER_ERROR( nWA, oError )
+            RETURN HB_FAILURE
+		 ENDIF
 		 
 		 // ONLY TO DO IF FIELD IN ORDER BY
 		 ADO_ORDINFO( nWA, DBOI_EXPRESSION, aOrderInfo )
@@ -1309,7 +1438,7 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
 
    LOCAL oField, nType, uval
    LOCAL cType := 'C', nLen := 10, nDec := 0, lRW := .t.,nDBFFieldType :=  HB_FT_STRING // default
-   LOCAL nFWAdoMemoSizeThreshold := 256
+   LOCAL nFWAdoMemoSizeThreshold := 255
    
    /*
      cType DBF TYPE "C","N","D" ETC
@@ -1350,8 +1479,7 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
       nLen     := 8
       IF oRs != nil .AND. ! oRs:Eof() .AND. VALTYPE( uVal := oField:Value ) == 'T' 
 	  //.AND. FW_TIMEPART( uVal ) >= 1.0 WHERE IS THIS FUNCTION?
-         cType      := '@' //'T'
-		 nLen := oField:DefinedSize
+         cType      := 'T'
 		 nDBFFieldType := HB_FT_TIMESTAMP // DONT KNWO IF IT IS CORRECT!
 	  ELSE
 	     nDBFFieldType := HB_FT_DATE
@@ -1360,39 +1488,47 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
    ELSEIF ASCAN( { adTinyInt, adSmallInt, adInteger, adBigInt, ;
                   adUnsignedTinyInt, adUnsignedSmallInt, adUnsignedInt, ;
                   adUnsignedBigInt }, nType ) > 0
-				  
+
       cType    := 'N'
-      nLen     := oField:Precision + 1  // added 1 for - symbol
+      nLen     := oField:Precision //+ 1  // added 1 for - symbol
 	  nDBFFieldType := HB_FT_INTEGER
-	  
+
       IF oField:Properties( "ISAUTOINCREMENT" ):Value == .t.
          cType := '+'
          lRW   := .f.
 		 nDBFFieldType := HB_FT_AUTOINC
       ENDIF
 	  
-   ELSEIF ASCAN( { adSingle, adDouble, adCurrency }, nType ) > 0
+   ELSEIF ASCAN( { adSingle, adDouble }, nType ) > 0
    
-      cType    := 'N' //SHOULDNT BE "B"?
+      cType    := 'N' 
 	  
-      nLen     := Max( 19, oField:Precision + 2 ) //MIN( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
-	  
+      nLen     := Min( 19, oField:Precision  ) //Max( 19, oField:Precision + 2 ) 
+	  nDBFFieldType := HB_FT_DOUBLE
+	  nDec  := 2
+	  /*
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
          nDec  := oField:NumericScale
+		 nDBFFieldType :=  HB_FT_DOUBLE //HB_FT_INTEGER WICH ONE IS CORRECT?
       ENDIF
+	  */
 	  
-      nDBFFieldType := HB_FT_INTEGER //HB_FT_DOUBLE WICH ONE IS CORRECT?
+   ELSEIF ASCAN( { adCurrency }, nType ) > 0	  
+      cType    := 'N'      // 'Y'
+      nLen     := Min( 19, oField:Precision  )  //19
+      nDec     := 2
+      nDBFFieldType :=  HB_FT_DOUBLE
 	  
    ELSEIF ASCAN( { adDecimal, adNumeric, adVarNumeric }, nType ) > 0
    
       cType    := 'N'
-      nLen     := Max( 19, oField:Precision + 2 )  //Min( 19, oField:Precision-oField:NumericScale-1 ) //+ 2 )
+      nLen     :=  Min( 19, oField:Precision  ) //Max( 19, oField:Precision + 2 )  
+	  nDBFFieldType := HB_FT_INTEGER
 	  
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
          nDec  := oField:NumericScale
+		 nDBFFieldType :=  HB_FT_DOUBLE 
       ENDIF
-	  
-	  nDBFFieldType :=  HB_FT_INTEGER  //WICH ONE IS CORRECT?HB_FT_LONG
 	  
    ELSEIF ASCAN( { adBSTR, adChar, adVarChar, adLongVarChar, adWChar, adVarWChar, adLongVarWChar }, nType ) > 0
    
@@ -1408,10 +1544,9 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
 	  
    ELSEIF ASCAN( { adBinary, adVarBinary, adLongVarBinary }, nType ) > 0
    
-      cType := "G"
       nLen     := oField:DefinedSize
       IF nType != adBinary .AND. nLen > nFWAdoMemoSizeThreshold
-         cType := 'M'
+         cType := 'm'
          nLen  := 10
       ENDIF
 	  
@@ -1452,8 +1587,8 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
       lRW      := .f.
 	  
    ENDIF
-   
-   /* IF lAnd( oField:Attributes, 0x72100 ) .OR. ! lAnd( oField:Attributes, 8 )
+  /* DOESNT WORK 
+    IF lAnd( oField:Attributes, 0x72100 ) .OR. ! lAnd( oField:Attributes, 8 )
       lRW      := .f.
    ENDIF
    */
@@ -2329,38 +2464,86 @@ STATIC FUNCTION ADO_RAWLOCK( nWA, nAction, nRecNo )
    
 STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 
-   LOCAL aWdata := USRRDD_AREADATA( nWA ),n
-   LOCAL oRs := aWdata[ WA_RECORDSET ]
+   LOCAL aWdata := USRRDD_AREADATA( nWA ),lOk := .T.
    
    HB_SYMBOL_UNUSED( nWA )
+	
+   IF (VALTYPE(aWdata[WA_OPENSHARED]) = "L"  .AND. !aWdata[WA_OPENSHARED]) .OR. aWdata[ WA_FILELOCK ]
+  
+      IF !aWdata[WA_OPENSHARED] //EXCLUSIVE OR FILE LOCKED USE DONT VERIFY ANYTHING
+         aLockInfo[ UR_LI_RESULT ] := .T.
+	     RETURN HB_SUCCESS
+	  ENDIF
+	  
+   ENDIF	  
    
-   IF EMPTY(aLockInfo[ UR_LI_RECORD ]) .OR. aLockInfo[ UR_LI_METHOD ] = DBLM_EXCLUSIVE
-      ADO_UNLOCK( nWA, aLockInfo[ UR_LI_RECORD ] )
-   ENDIF   
+   //ADO OPEN EXCLUSIVE  STILL NOT OPENED
+   IF aLockInfo[ UR_LI_METHOD ] = DBLM_EXCLUSIVE
+ 
+      IF !ADO_GETLOCK(aWdata[WA_TABLENAME],"EXCLUSIVE" ,aWdata[WA_TLOCKS] )
+         lOk := .F.
+      ENDIF	 
 
+   ENDIF
+   
+   //FILE LOCK WE DONT NEED TO CHECK ANYTHING ELSE
+   IF aLockInfo[UR_LI_METHOD] = DBLM_FILE 
+   
+      IF !aWdata[ WA_FILELOCK ]
+	  
+	     ADO_UNLOCK( nWA )
+		 
+		 IF !ADO_GETLOCK(aWdata[WA_TABLENAME],"ZWTXFL")
+            lOk := .F.
+         ENDIF
+		 
+      ENDIF	
+	  
+   ELSEIF aLockInfo[UR_LI_METHOD] = DBLM_MULTIPLE
+   
+      IF EMPTY(aLockInfo[ UR_LI_RECORD ]) 
+   
+         ADO_UNLOCK( nWA )
+	     aLockInfo[ UR_LI_RECORD ] := RECNO()
+	  
+      ENDIF	 
+	  
+	  IF !ADO_GETLOCK(aWdata[WA_TABLENAME],aLockInfo[ UR_LI_RECORD ] ,aWdata[WA_TLOCKS])
+         lOk := .F.
+      ENDIF
+   
+   ENDIF
+ 
    /*
    UR_LI_METHOD VALUES CONSTANTS
    DBLM_EXCLUSIVE 1 RELEASE ALL AND LOCK CURRENT 
    DBLM_MULTIPLE 2 LOCK CURRENT AND ADD TO LOCKLIST
    DBLM_FILE 3 RELEASE ALL LOCKS AND FILE LOCK 
    */
-   IF EMPTY(aLockInfo[ UR_LI_RECORD ])
-      aLockInfo[ UR_LI_RECORD ] := RECNO()
-   ENDIF	  
+   IF lOk
    
-   IF !ADO_GETLOCK(aWdata[WA_TABLENAME],IF( aLockInfo[UR_LI_METHOD] = DBLM_FILE,"ZWTXFL",aLockInfo[ UR_LI_RECORD ]) )
-      RETURN HB_FAILURE
+      IF aLockInfo[UR_LI_METHOD] = DBLM_FILE 
+	  
+	     aWdata[ WA_FILELOCK ] := .T.
+		 
+	  ELSEIF aLockInfo[ UR_LI_METHOD ] = DBLM_EXCLUSIVE	 
+	  
+	     aWdata[WA_OPENSHARED] := .F.
+		 
+      ELSE
+	  
+         AADD(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ])
+		 
+	  ENDIF  
+	  
+      aLockInfo[ UR_LI_RESULT ] := .T.
+	  
+   ELSE
+   
+       aLockInfo[ UR_LI_RESULT ] := .F.  
+	 
    ENDIF
    
-   IF aLockInfo[UR_LI_METHOD] = DBLM_FILE
-      aLockInfo[ UR_LI_RESULT ] := .T.
-	  aWdata[ WA_FILELOCK ] := .T.
-   ELSE
-      aLockInfo[ UR_LI_RESULT ] := .T.
-      AADD(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ])
-	ENDIF  
-   
-    ADOBEGINTRANS(nWa)	//START TRANSACTION
 	
    RETURN HB_SUCCESS
 
@@ -2368,30 +2551,42 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
 
    LOCAL aWdata := USRRDD_AREADATA( nWA ),n
-   LOCAL oRs := aWdata[ WA_RECORDSET ]
    
    HB_SYMBOL_UNUSED( xRecId )
    HB_SYMBOL_UNUSED( nWA )
    
-   ADO_GETUNLOCK(aWdata[ WA_TABLENAME],xRecID)   
+   IF !EMPTY(xRecID)
+   
+      ADO_GETUNLOCK(aWdata[ WA_TABLENAME],xRecID,aWdata[WA_TLOCKS])  //RELEASES ONLY THIS RECORD 
+	  
+   ELSE
+   
+      ADO_GETUNLOCK(aWdata[ WA_TABLENAME],"ZWTXFL",aWdata[WA_TLOCKS])   
+	  
+   ENDIF
    
    IF !EMPTY(xRecID)
+   
       n := ASCAN(aWdata[ WA_LOCKLIST ],xRecID)
 	  IF n > 0
 	     ADEL(aWdata[ WA_LOCKLIST ],n,.T.)
 	  ENDIF
+	  
    ELSE
+   
       aWdata[ WA_LOCKLIST ] := {}
 	  aWdata[ WA_FILELOCK ] := .F.
+	  
    ENDIF   
+   
    
    RETURN HB_SUCCESS
    
    
-STATIC FUNCTION ADO_GETLOCK(cTable,xRecID)   
+STATIC FUNCTION ADO_GETLOCK(cTable,xRecID, aWdLocks)   
  LOCAL lRetval := .F.
  LOCAL aLockCtrl :=  ADOLOCKCONTROL()
- LOCAL currArea := SELECT()
+ LOCAL currArea := SELECT(),n
  
   xRecID := ALLTRIM(CVALTOCHAR(xRecID))
   
@@ -2400,10 +2595,10 @@ STATIC FUNCTION ADO_GETLOCK(cTable,xRecID)
      TLOCKS->(DBSETINDEX(aLockCtrl[1]+".CDX"))	 
 	 SELECT(currArea)
   ENDIF
-    
+
   IF TLOCKS->(DBSEEK( cTable + xRecID ))
-  
-     IF TLOCKS->(DBRLOCK( IF( !EMPTY(xRecID), TLOCKS->(RECNO()), NIL) ) )
+	 
+     IF TLOCKS->(DBRLOCK(  TLOCKS->(RECNO()) ))
 	    lRetval := .T.
 	 ENDIF	
 	 
@@ -2411,14 +2606,15 @@ STATIC FUNCTION ADO_GETLOCK(cTable,xRecID)
   
      IF !TLOCKS->(DBSEEK(SPACE(50))) //RECOVERING USED RECORDS
 	 
-        TLOCKS->(DBAPPEND( IF( !EMPTY(xRecID), .F., .T.) ))
+        TLOCKS->(DBAPPEND( .F.) ) //DOES NOT RELEASEANY LOCKS
 		IF !NETERR()
 		   lRetval := .T.
+		   REPLACE TLOCKS->CODLOCK WITH cTable+xRecID
 		ENDIF   
 		
      ELSE
 	 
-        IF TLOCKS->(DBRLOCK( IF( !EMPTY(xRecID), TLOCKS->(RECNO()), NIL ) ))
+        IF TLOCKS->(DBRLOCK( TLOCKS->(RECNO()) ))
 	       lRetval := .T.
 		   REPLACE TLOCKS->CODLOCK WITH cTable+xRecID
 	    ENDIF	
@@ -2426,14 +2622,18 @@ STATIC FUNCTION ADO_GETLOCK(cTable,xRecID)
 	 ENDIF	
 	 
   ENDIF
-
+	 
+  IF lRetVal
+	 AADD(aWdLocks, { xRecID, TLOCKS->(RECNO()) } )
+  ENDIF
   
+
   RETURN lRetval
   
 
-STATIC FUNCTION ADO_GETUNLOCK(cTable,xRecID)   
+STATIC FUNCTION ADO_GETUNLOCK(cTable,xRecID,aWdLocks)   
  LOCAL aLockCtrl :=  ADOLOCKCONTROL()
- LOCAL currArea := SELECT()
+ LOCAL currArea := SELECT(),n,aDels := {}
  
   xRecID := ALLTRIM(CVALTOCHAR(xRecID)) 
   
@@ -2442,28 +2642,94 @@ STATIC FUNCTION ADO_GETUNLOCK(cTable,xRecID)
      TLOCKS->(DBSETINDEX(aLockCtrl[1]+".CDX"))	 
 	 SELECT(currArea)	 
   ENDIF
-   
-  IF !EMPTY(xRecID)   
   
-     IF TLOCKS->( DBSEEK( cTable + xRecID ) )
+  
+  IF ! xRecID = "ZWTXFL"
+  
+     n := ASCAN(aWdLocks, {|a| a[2] = xRecID} ) 
 	 
+	 IF n > 0   
+	 
+	    TLOCKS->(DBGOTO(aWdLocks[n,2]))
         IF TLOCKS->(ISLOCKED())
 	       REPLACE TLOCKS->CODLOCK WITH SPACE(50) //NOT TO GROW IT WILL BE RECYCLED NEXT TIME
 	    ENDIF	
-        TLOCKS->(DBRUNLOCK(TLOCKS->(RECNO())))
+        TLOCKS->(DBRUNLOCK(xRecID))
+	    ADEL(aWdLocks,n,.T.)
 		
 	 ENDIF
 	 
   ELSE
   
-      TLOCKS->(DBRUNLOCK())  
-	  
+     //RELEASE ALL LOCKS
+	 FOR n := 1 TO LEN(aWdLocks)
+	 
+         IF aWdLocks[n,1] <> "EXCLUSIVE" //EXCLUSIVE ONLY WHEN WE CLOSE TABLE
+		 
+	        TLOCKS->(DBGOTO(aWdLocks[n,2]))
+			IF TLOCKS->(ISLOCKED())
+	           REPLACE TLOCKS->CODLOCK WITH SPACE(50) //NOT TO GROW IT WILL BE RECYCLED NEXT TIME
+			ENDIF   
+	        TLOCKS->(DBRUNLOCK(aWdLocks[n,2]))
+		    AADD(aDels,n)
+			
+	     ENDIF	
+		 
+	 NEXT
+      	
   ENDIF
-
+  
+  IF LEN( aDels) > 0
+  
+     FOR N :=  1 TO LEN(aDels)
+	     ADEL(aWdLocks,aDels[n],.T.) 
+	 NEXT
+ 
+  ENDIF
+  
+  IF PROCNAME(2) = "ADO_CLOSE" .AND. LEN(aWdLocks) > 0  //EXCLUSIVE CLEAN ALL LOCKS IN CLOSING IT
+  
+     TLOCKS->(DBGOTO(aWdLocks[1,2]))
+     REPLACE TLOCKS->CODLOCK WITH SPACE(50) 
+     TLOCKS->(DBRUNLOCK(aWdLocks[1,2]))
+	 
+  ENDIF
+  
   
   RETURN HB_SUCCESS
+
   
+FUNCTION ADO_ISLOCKED(cTable,xRecID,aWdLocks)  
+  xRecID := ALLTRIM(CVALTOCHAR(xRecID)) 
+  RETURN ASCAN(aWdLocks, {|x| x[1] = ALLTRIM(CVALTOCHAR(xRecID))} )  > 0   
+  
+  
+FUNCTION ADO_OPENSHARED( nWA,cTable)
+ LOCAL lRetval := .F.
+ LOCAL aLockCtrl :=  ADOLOCKCONTROL()
+ LOCAL currArea := SELECT()
+ 
+  IF SELECT("TLOCKS") = 0
+     DBUSEAREA(.T.,aLockCtrl[2],aLockCtrl[1]+".DBF","TLOCKS",.T.)
+     TLOCKS->(DBSETINDEX(aLockCtrl[1]+".CDX"))	 
+	 SELECT(currArea)
+  ENDIF
+
+  IF TLOCKS->(DBSEEK( cTable + "EXCLUSIVE" ))
+
+     IF TLOCKS->(DBRLOCK(  TLOCKS->(RECNO()) ))  //CAN BE OPENED?
+        TLOCKS->(DBRUNLOCK(  TLOCKS->(RECNO()) ))
+	    lRetval := .T.
+	 ENDIF	
+
+  ELSE
    
+     lRetval := .T.
+  	 
+  ENDIF
+ 
+  RETURN lRetval  
+  
 /*                              END LOCKS RELATED FUNCTIONS */   
 
 /*                                             TRANSACTION RELATED FUNCTIONS */
@@ -2474,13 +2740,9 @@ STATIC FUNCTION ADO_FLUSH( nWA )
    
    TRY
    
-      //oRecordSet:Update()
-	  
-	  ADOCOMMITTRANS(nWa) //COMMIT TRANSACTION
+      oRecordSet:Update()
 	  
    CATCH
-   
-      ADOROLLBACKTRANS(nWa) //ROLL IT BACK
 	  
    END
    
@@ -2608,9 +2870,9 @@ STATIC FUNCTION ADO_CLEARFILTER( nWA )
 STATIC FUNCTION ADO_SETLOCATE( nWA, aScopeInfo )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
-   
+      
    aWAData[ WA_SCOPEINFO ] := aScopeInfo
-
+   
    RETURN HB_SUCCESS
    
 
@@ -2619,25 +2881,25 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
 
-   
    IF ADOEMPTYSET(oRecordSet)
       RETURN HB_FAILURE
    ENDIF
- 
+
    IF !lContinue 
-      oRecordSet:MoveFirst() //START FROM BEGINING
+      ADO_GOTOP(nWA) //START FROM BEGINING
    ELSE
-      oRecordSet:MoveNext() //WE DONT WNAT TO FIND THIS ONE AGAIN
+      ADO_SKIPRAW(nWA,1) //WE DONT WNAT TO FIND THIS ONE AGAIN
    ENDIF
-   
-   DO WHILE !oRecordSet:EoF()
+   CURSORWAIT()
+   DO WHILE !aWAData[ WA_EOF ]
       IF EVAL( aWAData[ WA_SCOPEINFO ][ UR_SI_BFOR ])
 	     aWAData[ WA_FOUND ] := .T.
 	     EXIT
 	  ENDIF	 
-      oRecordSet:MoveNext()
+      ADO_SKIPRAW(nWA,1)
+	  SYSREFRESH()
    ENDDO
-
+   CURSORARROW()
     
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
    aWAData[ WA_EOF ] := oRecordSet:EOF
@@ -3198,65 +3460,55 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo )
 	  ENDIF 
    ENDIF
 
+ 
+   aOpenInfo[ UR_OI_NAME ] := CFILENOEXT( CFILENOPATH( cTable ) )
+
+   ADOCONNECT(nWA,aOpenInfo)
+   
+   cSql := ADOSTRUCTTOSQL( aWAData,aWAData[ WA_SQLSTRUCT ],@lAddAutoInc )
+
+   IF Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
+      aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
+   ENDIF
+   
+   
    TRY
- 
-      //cSql :=  FW_AdoCreateTableSQL( cTableName, aWAData[ WA_SQLSTRUCT ], oConnection, .T. )
-      //oConnection:Execute( cSql )
-	  MSGINFO("Uncomment FW_AdoCreateTableSQL in ADO_CREATE in adordd.prg if you have the adofuncs.prg"+;
-              " and want to use it instead! or comment this message")
-      BREAK			
-	
-   CATCH	
- 
-      aOpenInfo[ UR_OI_NAME ] := CFILENOEXT( CFILENOPATH( cTable ) )
-
-      ADOCONNECT(nWA,aOpenInfo)
-   
-      cSql := ADOSTRUCTTOSQL( aWAData,aWAData[ WA_SQLSTRUCT ],@lAddAutoInc )
-
-      IF Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
-         aWAData[ WA_TABLENAME ] := CFILENOEXT(CFILENOPATH(aWAData[ WA_TABLENAME ] ))
-      ENDIF
-   
-   
-      TRY
-	    //TEMPORARY TABLES ARE DESTROYE AUTO WHEN NO NEEDED ANYMORE
-        IF UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,4 ) ) = "TEMP"
-           cMarkTmp := ADOTEMPTABLE( cDbEngine )
-		   //we need to create the file in order to eventually test file() works in the app
-		   MEMOWRIT(cTable,"nada")
-		ELSE
-           cMarkTmp	:= "TABLE "
-        ENDIF
+       //TEMPORARY TABLES ARE DESTROYE AUTO WHEN NO NEEDED ANYMORE
+       IF UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( aWAData[ WA_TABLENAME ] ,1,4 ) ) = "TEMP"
+          cMarkTmp := ADOTEMPTABLE( cDbEngine )
+		  //we need to create the file in order to eventually test file() works in the app
+		  MEMOWRIT(cTable,"nada")
+	   ELSE
+          cMarkTmp	:= "TABLE "
+       ENDIF
 		
-	    cSql := "CREATE "+cMarkTmp+  aWAData[ WA_TABLENAME ]  + " ( " + cSql + " )"
+	   cSql := "CREATE "+cMarkTmp+  aWAData[ WA_TABLENAME ]  + " ( " + cSql + " )"
 
-        //ORACLE NO AUTOINC ONLY SEQUENCE AS IT SHOULD BE FOR ALL
-	    IF aWAData[ WA_ENGINE ] = "ORACLE" .AND. lAddAutoInc
-		   cSql2    := "CREATE SEQUENCE " + aWAData[ WA_TABLENAME ] + "_ID_SEQ"
-		   cSql     += "|" + cSql2
-		   cSql2    := "CREATE OR REPLACE TRIGGER " + aWAData[ WA_TABLENAME ] +;
-		               "_BI_TRG BEFORE INSERT ON " + aWAData[ WA_TABLENAME ]
-		   cSql2    += " FOR EACH ROW BEGIN "
-		   cSql2    += " SELECT " + aWAData[ WA_TABLENAME ] + "_ID_SEQ.nextval INTO :new.id FROM DUAL; END;"
-		   cSql     += "|" + cSql2
-	    ENDIF
+       //ORACLE NO AUTOINC ONLY SEQUENCE AS IT SHOULD BE FOR ALL
+	   IF aWAData[ WA_ENGINE ] = "ORACLE" .AND. lAddAutoInc
+		  cSql2    := "CREATE SEQUENCE " + aWAData[ WA_TABLENAME ] + "_ID_SEQ"
+		  cSql     += "|" + cSql2
+		  cSql2    := "CREATE OR REPLACE TRIGGER " + aWAData[ WA_TABLENAME ] +;
+		              "_BI_TRG BEFORE INSERT ON " + aWAData[ WA_TABLENAME ]
+		  cSql2    += " FOR EACH ROW BEGIN "
+		  cSql2    += " SELECT " + aWAData[ WA_TABLENAME ] + "_ID_SEQ.nextval INTO :new.id FROM DUAL; END;"
+		  cSql     += "|" + cSql2
+	   ENDIF
 	 
-        IF '|' $ cSql
-           AEVAL( HB_ATokens( cSql, '|' ), { |c| aWAData[ WA_CONNECTION ]:Execute( c ) } )
-        ELSE
-           aWAData[ WA_CONNECTION ]:Execute( cSql )
-        ENDIF
+       IF '|' $ cSql
+          AEVAL( HB_ATokens( cSql, '|' ), { |c| aWAData[ WA_CONNECTION ]:Execute( c ) } )
+       ELSE
+          aWAData[ WA_CONNECTION ]:Execute( cSql )
+       ENDIF
 	 
-	    MEMOWRIT( "creatsql.txt", cSql )
+	   MEMOWRIT( "creatsql.txt", cSql )
 	  
-      CATCH //modified by LucasDeBeltran 
+   CATCH //modified by LucasDeBeltran 
    
          //INFORM ADOERROR
          ADOSHOWERROR( aWAData[ WA_CONNECTION ] )
 	  
       END
-   END
  
    RETURN HB_SUCCESS
    
@@ -3462,15 +3714,12 @@ FUNCTION ADOTEMPTABLE(DbEngine)
   RETURN cMark
 
   
-STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
+STATIC FUNCTION ADO_EXISTS( cTable, cIndex)
 
-   // LOCAL n
    LOCAL lRet := HB_FAILURE
-   LOCAL aWAData  := USRRDD_RDDDATA( nRDD )
-   LOCAL oRs := aWAData[WA_RECORDSET], oCn := oConnection
+   LOCAL oCn := TOleAuto():New( "ADODB.Connection" )
+   LOCAL oRs := TOleAuto():New( "ADODB.Recordset" )
    LOCAL aIndexes := ListIndex(), z, y 
-   
-   HB_SYMBOL_UNUSED( ulConnect )
    
    //FROM FW_ADOCREATETABLE
    IF ! EMPTY( cTable ) 
@@ -3478,19 +3727,19 @@ STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
       TRY
 	  
           oRs      := oCn:OpenSchema( adSchemaTables, { nil, nil, cTable, "TABLE" } )
-          lExist   := !( oRs:Bof .and. oRs:Eof )
+          lRet   := !( oRs:Bof .and. oRs:Eof )
           oRs:Close()
 		  
       CATCH
 	  
           // Older ADO version not supporting second parameter
-          TRY
+         TRY
 		 
               oRs   := oCn:OpenSchema( adSchemaTables )
 			 
               IF ! oRs:Eof()
                  oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
-                 lExist   := !( oRs:Bof .and. oRs:Eof )
+                 lRet   := !( oRs:Bof .and. oRs:Eof )
               ENDIF
 			 
               oRs:Close()
@@ -3501,8 +3750,8 @@ STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
               // we do not know if the table exists
               ADOSHOWERROR( oCn )  // Comment out in final release
 			
-           END
-	  END	 
+          END
+	   END	 
 	   
    ENDIF
    
@@ -3542,17 +3791,16 @@ STATIC FUNCTION ADO_EXISTS( nRdd, cTable, cIndex, ulConnect )
    RETURN lRet
   
 
-STATIC FUNCTION ADO_DROP( nRdd, cTable, cIndex, ulConnect )
+STATIC FUNCTION ADO_DROP( cTable, cIndex )
 
    LOCAL lRet := HB_FAILURE
-   LOCAL oRecordSet := USRRDD_RDDDATA( nRDD )
 
    HB_SYMBOL_UNUSED( ulConnect )
 
    IF ! EMPTY( cTable ) 
       TRY
 
-		 aWAData[ WA_CONNECTION ]:Execute( "DROP TABLE " + cTable )
+		 oConnection:Execute( "DROP TABLE " + cTable )
          lRet := HB_SUCCESS
       CATCH
 	     ADOSHOWERROR( aWAData[ WA_CONNECTION ], .f. )
@@ -3562,6 +3810,7 @@ STATIC FUNCTION ADO_DROP( nRdd, cTable, cIndex, ulConnect )
 
    RETURN lRet
 /*                             END FILE RELATED FUNCTION */   
+
 
 /*                                     GENERAL */
 STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
@@ -4125,8 +4374,26 @@ FUNCTION hb_adoRddGetRecordSet( nWA )
    aWAData := USRRDD_AREADATA( nWA )
 
    RETURN iif( aWAData != NIL, aWAData[ WA_RECORDSET ], NIL )
+   
 
+FUNCTION hb_adoRddGetTableName( nWA )
 
+   LOCAL aWAData
+
+   IF ! HB_ISNUMERIC( nWA )
+      nWA := Select()
+   ENDIF
+
+   aWAData := USRRDD_AREADATA( nWA )
+
+   RETURN iif( aWAData != NIL, aWAData[ WA_TABLENAME ], NIL )
+   
+  
+FUNCTION hb_adoRddExistsTable( cTable, cIndex )
+   RETURN ADO_EXISTS( cTable, cIndex )
+
+   
+   
 FUNCTION ListIndex(aList) //ATTENTION ALL MUST BE UPPERCASE
 //index files array needed for the adordd for your application
 //order expressions already translated to sql DONT FORGET TO replace taitional + sign with ,
@@ -4319,7 +4586,7 @@ FUNCTION ADOLOCKCONTROL(cPath,cRdd)
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.290415/1"
+RETURN "AdoRdd Version 1.040515/1"
 
 /*                   END ADO SET GET FUNCTONS */
    
@@ -4330,4 +4597,31 @@ FOR N:= 1 TO LEN(AARRAY)
    AARRAY[N] := CVALTOCHAR(AARRAY[N] )
 NEXT
 RETURN AARRAY
+
+#pragma BEGINDUMP
+
+#include <windows.h>
+#include <hbapi.h>
+
+HB_FUNC( FW_TTOD )
+{
+   hb_retdl( hb_pardl( 1 ) );
+}
+
+HB_FUNC( FW_DTOT )
+{
+
+#ifdef __XHARBOUR__
+   hb_retdtl( hb_pardl( 1 ), hb_part( 1 ) );
+#else
+   long lJulian;
+   long lMilliSecs;
+
+   hb_partdt( &lJulian, &lMilliSecs, 1 );
+   hb_rettdt( lJulian, lMilliSecs );
+#endif
+}
+
+#pragma ENDDUMP
+ 
  
