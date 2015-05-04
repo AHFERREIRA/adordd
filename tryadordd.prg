@@ -24,7 +24,7 @@
     //order expressions as dbfs type
     //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","FOR EXPRESSION","UNIQUE" } }
 	
-    //SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
+    //SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","SUBSTR(FIRST,1,5)"} }, {"TABLE2" ,{"CODID","CODID"}} }
 
     //temporary index names
     //temporary indexes are not included here they are create on fly and added to temindex list array
@@ -197,7 +197,6 @@
    SET INDEX TO TMP
 
    BROWSE()
-   DbCloseAll()
    
    cSql := "CREATE VIEW CONTACTS AS SELECT TABLE1.FIRST, TABLE1.LAST,"+;
             "TABLE1.AGE, TABLE2.ADDRESS, TABLE2.EMAIL "+;
@@ -215,8 +214,29 @@
    MSGINFO("BROWSING VIEW CONTACTS")
    BROWSE()
    INDEX ON ADDRESS TO TMP2
-   MSGINFO("VIEW INDEXED BY ADDRESS")
+   SET INDEX TO TMP2
+   MSGINFO("INDEXED BY ADRESS")
    BROWSE()
+
+   //WORKING DIRECTLY WITH RECORDSET IN ANOTHER AREA
+   MSGINFO("GET RECORDSET FOR TABLE TEST1 "+STR(SELECT("TEST1")) )
+   
+   oRs := hb_adoRddGetRecordSet(SELECT("TEST1"))
+   
+   oRs:close()
+   aa := "SELECT * FROM "+hb_adoRddGetTableName( SELECT("TEST1") )+ " WHERE FIRST = 'Lara'"
+   
+   MSGINFO("NEW SELECT FOR RECORDSET TEST1 "+AA)
+   oRs:open(aa,hb_adoRddGetConnection(SELECT("TEST1")))
+   
+   MSGINFO("CURRENT WORKAREA "+ALIAS())
+   
+   MSGINFO("BROWSE RECORDSET ALIAS TEST1")
+   TEST1->(BROWSE())
+   
+   MSGINFO("DOES TABLE1 EXISTS ON DB ?"+CVALTOCHAR(hb_adoRddExistsTable( "Table1") ))
+   MSGINFO("DOES TABLE3 EXISTS ON DB ?"+CVALTOCHAR(hb_adoRddExistsTable( "Table3") ))
+   DbCloseAll()
    
 RETURN nil	
 	
