@@ -4747,6 +4747,7 @@ FUNCTION ADOLOCKCONTROL(cPath,cRdd)
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
+RETURN "AdoRdd Version 1.060515/1"
 
 /*                   END ADO SET GET FUNCTONS */
    
