@@ -29,5 +29,46 @@ Filters can not be evaluated without cFilter expression.
 
 Thats all!
 
-Please read notes in tryadordd.prg.
+IMPORTANT NOTES:
+
+Its very imortant that you indicate in adordd.prg in the several places with the cursorlocation the type of cursor you need to your DB.
+Not choosing the right cursor the browses become irregular.
+Please remember that all browse positioning is based on absoluteposition thus a cursor that can not support it doesnt work.
+Also you need a cursor that supports update() and requery().
+The cursors defined in adordd support:
+
+ACCESS
+MYSQL
+ORACLE
+
+Changes:
+Locks now work as it should.
+Exclusive use in progress not validated
+
+Using Browse() you must pass delete block because it does not lock the record and adorddd raises a lock required error.
+Also when you change the index key value the browse() does not re-position immediately the grid. Click right or left arrows.
+
+adordd has been working ok with :
+
+ACCESS
+MYSQL
+ORACLE
+
+both in internal network and internet and its ok.
+Internet a little slow but not crawling with tables 30.000 recs.
+You must find which are the best parameters for your case and adjust it in ADO_OPEN
+
+Look for:
+Code:
+
+  //PROPERIES AFFECTING PERFORMANCE TRY
+   //oRecordSet:MaxRecords := 60
+   //oRecordSet:CacheSize := 50 //records increase performance set zero returns error set great server parameters max open rows error
+   //oRecordset:PageSize = 10
+   //oRecordSet:MaxRecords := 15
+   //oRecordset:Properties("Maximum Open Rows") := 110  //MIN TWICE THE SIZE OF CACHESIZE
+ 
+
+
+Please post your comments and findings.
 
