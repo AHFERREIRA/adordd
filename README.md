@@ -5,9 +5,6 @@ adordd for (x)Harbour
 
 Most part of adordd its done!
 
-Please alter in adord.prg the cursorlocation as supported by the DB you are using.
-Like it is it supports ACCESS and Mysql / Oracle / ADS
-
 Funtions you can call in adordd.prg to use in our app :
 
  ADOVERSION() Returns adordd version
