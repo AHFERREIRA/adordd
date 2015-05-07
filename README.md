@@ -8,6 +8,12 @@ Most part of adordd its done!
 Funtions you can call in adordd.prg to use in our app :
 
  ADOVERSION() Returns adordd version
+ ADOSEEKSQL( nWA, lSoftSeek, cKey, lFindLast ) //returns a set of records meeting seek key
+ ADORESETSEEK() //resets the recodset to previous before call ADOSEEKSQL()
+ ADOBEGINTRANS(nWa)
+ ADOCOMMITTRANS(nWa)
+ ADOROLLBACKTRANS(nWa) 
+
  hb_adoRddGetConnection( nWorkArea ) Returns the connection for the workarea
  hb_adoRddGetRecordSet( nWorkArea )  Returns the recordset for the nWorkArea 
  hb_adoRddGetTableName( nWorkArea )  Returns tabe name for the nWorkArea  
