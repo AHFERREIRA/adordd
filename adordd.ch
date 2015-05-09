@@ -215,6 +215,19 @@
 #define adPosEOF                        -3 /*Indicates that the current record pointer is at EOF (that is, the EOF property is True).*/
 #define adPosUnknown                    -1 /*Indicates that the Recordset is empty, the current position is unknown, or the provider does not support the AbsolutePage or AbsolutePosition property.*/
 
+/*Resync AffectEnum */
+#define adAffectAll               3  /* If there is not a Filter applied to the Recordset, affects all records.
+                                        If the Filter property is set to a string criteria (such as "Author='Smith'"), then the operation affects visible records in the current chapter.
+                                        If the Filter property is set to a member of the FilterGroupEnum or an array of bookmarks, then the operation will affect all rows of the Recordset.
+                                        Note Note	adAffectAll is hidden in the Visual Basic Object Browser. */
+#define adAffectAllChapters       4  /* Affects all records in all sibling chapters of the Recordset, including those not visible via any Filter that is currently applied.*/
+#define adAffectCurrent           1  /* Affects only the current record.*/
+#define adAffectGroup             2  /* Affects only records that satisfy the current Filter property setting. You must set the Filter property to a FilterGroupEnum value or an array of Bookmarks to use this option.*/
+
+/* Resync Enum*/
+#define adResyncAllValues                 2  /* Default. Overwrites data, and pending updates are canceled.*/
+#define adResyncUnderlyingValues          1  /* Does not overwrite data, and pending updates are not canceled.*/
+
 #command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
