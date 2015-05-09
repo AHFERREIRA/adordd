@@ -1,6 +1,27 @@
 # adordd
 adordd for (x)Harbour
 
+09.05.15
+
+Corrected add, update and delete records.
+Reccount changed because of speed problems.
+Concurrent access and locks improved
+
+TO DO
+Relations are slow we are improving it.
+Trigger to check for outdated recordset.
+
+Please try it for ex for MySql (we are only trying it now with MySQl)
+
+Please alter in tryadordd.prg:
+
+SET ADO DEFAULT DATABASE TO "your DB name" SERVER TO "db4free.net"  ENGINE TO "MYSQL" USER TO "you user name" PASSWORD TO "your passord"
+
+SET ADO LOCK CONTROL SHAREPATH TO  "your shared path" RDD TO "DBFCDX"
+DbCreate( "your DB name;TABLE0;MYSQL;db4free.net;your user name;your passowrd",....
+
+
+
 06.05.15
 
 Most part of adordd its done!
