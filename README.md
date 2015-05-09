@@ -5,7 +5,7 @@ adordd for (x)Harbour
 
 Corrected add, update and delete records.
 Reccount changed because of speed problems.
-Concurrent access and locks improved
+Concurrent access and locks improved Use exclusive ok
 
 TO DO
 Relations are slow we are improving it.
