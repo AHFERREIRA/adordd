@@ -1,6 +1,25 @@
 # adordd
 adordd for (x)Harbour
 
+14.05.15
+
+APPEND FROM and COPY TO done! Only for database type dindt test it for Delimiter,SDF, etc. We dont need it.
+
+Adordd it has been all this week on trials in real app.
+
+Found and corrected some minor bugs.
+
+Still problems with some browses where the order is by field date type
+
+DBEVAL still didnt solve performance problem its too slow!
+
+All major functionality as any other rdd done!
+
+Im only trying it with MYSql.
+
+ADORDD its ready! Read IMportant Notes below.
+
+
 09.05.15
 
 Corrected add, update and delete records.
