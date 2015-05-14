@@ -17,7 +17,7 @@ All major functionality as any other rdd done!
 
 Im only trying it with MYSql.
 
-ADORDD its ready! Read IMportant Notes below.
+ADORDD its ready! Read Important Notes below.
 
 
 09.05.15
