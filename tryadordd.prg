@@ -7,51 +7,50 @@
   RddRegister("ADORDD",1) 
   RddSetDefault("ADORDD") 
 
-    //sql aware tables index expressions 
-    //ATTENTION ALL MUST BE UPPERCASE
-    //index files array needed for the adordd for your application
-    //order expressions already translated to sql DONT FORGET TO replace taitional + sign with ,
-    //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","WHERE EXPRESSION AS USED FOR FOREXPRESSION","UNIQUE - DISTINCT ANY SQL STAT BEFORE * FROM"} }
-    //temporary indexes are not included here they are create on fly and added to temindex list array
-    //they are only valid through the duration of the application
-    //the temp index name is auto given by adordd
   
-    //SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
-	 
-	//dbfs type index expression 
-    //ATTENTION ALL MUST BE UPPERCASE
-    //index files array needed for the adordd for your application 
-    //order expressions as dbfs type
-    //ARRAY SPEC { {"TABLENAME",{"INDEXNAME","INDEXKEY","FOR EXPRESSION","UNIQUE" } }
+    /*                                             NOTES
 	
-    //SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","SUBSTR(FIRST,1,5)"} }, {"TABLE2" ,{"CODID","CODID"}} }
+	SET ADO TABLES INDEX LIST TO = indexes without of any clipper like expression only to be used by SQL
 
-    //temporary index names
-    //temporary indexes are not included here they are create on fly and added to temindex list array
-    //they are only valid through the duration of the application
-    //the temp index name is auto given by adordd	
-	
-    //SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
-	
-	//each table autoinc field used as recno 
-	
-    //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
-	
-	//default table autoinc field used as recno
-	
-    //SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+    SET ADODBF TABLES INDEX LIST TO = indexes with the clipper like expressions needed by the app for its evaluations.
 
-	//SET AUTOPEN ON //might be OFF if you wish
-	//SET AUTORDER TO 1 // first index opened can be other
+    When we use &(indexkey(0)) we cant evaluate a index expression in ADO TABLES "name+dDate+nValue" we will get an error but we can issues a sql select like that.
+    Thus we need the ADODBF expression "name+DTOS(dDate)+STR(nValue) to do it.
+
+    The ADO indexes are for queries the ADODBF are for the normal clipper expressions to allow its evaluation.
+
+	ARRAY SPEC FOR BOTH CASES:
+	ATTENTION ALL MUST BE UPPERCASE
+	{ {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
 	
-	//set default parameters to adordd if you do not USE COMMAND or dont pretend to include this info
-	//set it here
+    temporary index names
+    temporary indexes are not included here they are create on fly and added to temindex list array
+    they are only valid through the duration of the application
+    the temp index name is auto given by adordd	
 	
-	//SET ADO DEFAULT DATABASE TO "test2.mdb" SERVER TO "ACCESS" ENGINE TO "ACESS" ;
-	//USER TO "" PASSWORD TO ""
+    SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+	
+	each table autoinc field used as recno 
+	
+    SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
+	
+	default table autoinc field used as recno
+	
+    SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+
+	SET AUTOPEN ON //might be OFF if you wish
+	SET AUTORDER TO 1 // first index opened can be other
+	
+	set default parameters to adordd if you do not USE COMMAND or dont pretend to include this info
+	set it here
+	
+	SET ADO DEFAULT DATABASE TO "test2.mdb" SERVER TO "ACCESS" ENGINE TO "ACESS" ;
+	  USER TO "" PASSWORD TO ""
     
-	//SET DBF TABLE TCONTROL ALL LOCKING RECORD AND TABLE IN ADORDD
-	//SET ADO LOCK CONTROL SHAREPATH TO  "d:\followup-testes" RDD TO "DBFCDX"
+	SET DBF TABLE TCONTROL ALL LOCKING RECORD AND TABLE IN ADORDD
+	
+	DEFAULTS TO PATH WHERE APP IS RUNING
+	SET ADO LOCK CONTROL SHAREPATH TO  "C:" RDD TO "DBFCDX"
 	
 /*               THE ONLY CHANGES IN YOUR APP CODE END HERE! (SHOULD)              */
 
@@ -83,6 +82,8 @@
    FILTERS ARE REALLY SELECTS USING FILTER2SQL() IN ADORDD THAT ALLOW THE USE OF NORMAL DBF FILTERS
    EXPRESSIONS. THIS IS COFIGURED FOR ADS OR USUAL SQL SINTAX BUT YOU CAN CONFIGURE IT FOR ANY DB 
    
+   ANY INDEX FUNCTION OR VARIABLES MUST BE EVALUAED BEFORE SENT TO ADO
+   
    BESIDES THESE CHANGES APP SHOULD RUN WITHOUT ANY CODE LOGIC CHANGE
 
    PLEASE REPORT ANY BUGS! THANKS!   */	
@@ -102,14 +103,14 @@
     SET ADO LOCK CONTROL SHAREPATH TO  "D:\WHATEVER" RDD TO "DBFCDX"
 
    IF !FILE(   "\test2.mdb"   )
-      //need to include complete path
+      //need to include complete path defaults to SET ADO DEFAULT DATABA
       DbCreate( "\test2.mdb;table1", ;
 	                                { { "CODID",   "C", 10, 0 },;
 	                                  { "FIRST",   "C", 30, 0 },;
                                       { "LAST",    "C", 30, 0 },;
                                       { "AGE",     "N",  8, 0 },;
 									  { "HBRECNO", "+", 10, 0  } }, "ADORDD" )
-	 //need to include complete path								  
+	 //need to include complete path defaults to SET ADO DEFAULT DATABA							  
      DbCreate( "\test2.mdb;table2", ;
 	                                { { "CODID",    "C", 10, 0 },;
 	                                  { "ADDRESS",  "C", 30, 0 },;
@@ -204,9 +205,9 @@
    MSGINFO("RUNING SQL "+cSql)
    
    TRY
-      GETADOCONN():EXECUTE(cSql)
+      hb_GetAdoConnection()():EXECUTE(cSql)
    CATCH
-      ADOSHOWERROR( GETADOCONN())
+      ADOSHOWERROR( hb_GetAdoConnection()())
    END   
    
    SELE 0
