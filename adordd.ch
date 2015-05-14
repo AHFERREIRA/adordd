@@ -246,12 +246,6 @@
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
 
-/* WE DONT NEED IT ANYMORE (FOR NOW)
-#command LOCATE [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-                [RECORD <rec>] [<rest:REST>] [ALL] => ;
-         [ hb_adoSetLocateFor( <(for)> ); ] ;
-         __dbLocate( <{for}>, <{while}>, <next>, <rec>, <.rest.> )
-*/
 	 
 /* sets for adordd */
 #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
@@ -265,55 +259,7 @@
 
 /*		 TODO
 
-#command CREATE <(db)> [FROM <(src)>] [VIA <rdd>] [ALIAS <a>] ;
-                [<new: NEW>] [CODEPAGE <cp>] [CONNECTION <conn>] => ;
-         __dbCreate( <(db)>, <(src)>, <rdd>, <.new.>, <(a)>, <cp>, <conn>)
-
 #command COPY [STRUCTURE] [EXTENDED] [TO <(f)>] => __dbCopyXStruct( <(f)> )
-
-#command COPY [TO <(f)>] [FIELDS <fields,...>] ;
-              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-              [RECORD <rec>] [<rest:REST>] [ALL] ;
-              [DELIMITED [WITH <*delim*>]] [CODEPAGE <cp>] => ;
-         __dbDelim( .T., <(f)>, <(delim)>, { <(fields)> }, ;
-                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
-
-#command COPY [TO <(f)>] [SDF] [FIELDS <fields,...>] ;
-              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-              [RECORD <rec>] [<rest:REST>] [ALL] [CODEPAGE <cp>] => ;
-         __dbSDF( .T., <(f)>, { <(fields)> }, ;
-                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
-
-#command COPY [TO <(f)>] [FIELDS <fields,...>] ;
-              [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-              [RECORD <rec>] [<rest:REST>] [ALL] [VIA <rdd>] ;
-              [CODEPAGE <cp>] [CONNECTION <conn>] => ;
-         __dbCopy( <(f)>, { <(fields)> }, ;
-                   <{for}>, <{while}>, <next>, <rec>, <.rest.>, <rdd>, <conn>, <cp> )
-
-#command APPEND [FROM <(f)>] [FIELDS <fields,...>] ;
-                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-                [RECORD <rec>] [<rest:REST>] [ALL] ;
-                [DELIMITED [WITH <*delim*>]] [CODEPAGE <cp>] => ;
-         __dbDelim( .F., <(f)>, <(delim)>, { <(fields)> }, ;
-                    <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
-
-#command APPEND [FROM <(f)>] [SDF] [FIELDS <fields,...>] ;
-                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-                [RECORD <rec>] [<rest:REST>] [ALL] [CODEPAGE <cp>] => ;
-         __dbSDF( .F., <(f)>, { <(fields)> }, ;
-                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <cp> )
-
-#command APPEND [FROM <(f)>] [FIELDS <fields,...>] ;
-                [FOR <for>] [WHILE <while>] [NEXT <next>] ;
-                [RECORD <rec>] [<rest:REST>] [ALL] [VIA <rdd>] ;
-                [CODEPAGE <cp>] [CONNECTION <conn>] => ;
-         __dbApp( <(f)>, { <(fields)> }, ;
-                  <{for}>, <{while}>, <next>, <rec>, <.rest.>, <rdd>, <conn>, <cp> )
-
-#command JOIN [WITH <(alias)>] [TO <f>] [FIELDS <fields,...>] [FOR <for>] => ;
-         __dbJoin( <(alias)>, <(f)>, { <(fields)> }, ;
-                   if(EMPTY(#<for>), { || .T. }, <{for}> ) )
 
 */
 #endif
