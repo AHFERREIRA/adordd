@@ -1,7 +1,7 @@
 # adordd
 adordd for (x)Harbour
 
-1) Just add adordd.prg to your project dn thats it!
+1) Just add adordd.prg to your project and thats it!
 
 2) Check tryadordd.prg
 
