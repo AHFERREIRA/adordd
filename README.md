@@ -74,18 +74,29 @@ Most part of adordd its done!
 Funtions you can call in adordd.prg to use in our app :
 
  ADOVERSION() Returns adordd version
+ 
  ADOSEEKSQL( nWA, lSoftSeek, cKey, lFindLast ) //returns a set of records meeting seek key
+ 
  ADORESETSEEK() //resets the recodset to previous before call ADOSEEKSQL()
+ 
  ADOBEGINTRANS(nWa)
+ 
  ADOCOMMITTRANS(nWa)
+ 
  ADOROLLBACKTRANS(nWa) 
  
  hb_adoRddGetConnection( nWorkArea ) Returns the connection for the workarea
+ 
  hb_adoRddGetRecordSet( nWorkArea )  Returns the recordset for the nWorkArea 
+ 
  hb_adoRddGetTableName( nWorkArea )  Returns tabe name for the nWorkArea  
+ 
  hb_adoRddExistsTable( oCon,cTable, cIndex ) Returns .t. if table or table and index exist on the DB
+ 
  hb_adoRddDrop( oCon, cTable, cIndex, DBEngine ) Drops (delete) table or index in the DB
+ 
  hb_GetAdoConnection() Returns ado default connection
+ 
  
 All the rest its standard rdd functions we are used to.
 
