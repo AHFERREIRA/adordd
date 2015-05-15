@@ -104,14 +104,14 @@
 
    IF !FILE(   "\test2.mdb"   )
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "\test2.mdb;table1", ;
+      DbCreate("table1;\test2.mdb", ;
 	                                { { "CODID",   "C", 10, 0 },;
 	                                  { "FIRST",   "C", 30, 0 },;
                                       { "LAST",    "C", 30, 0 },;
                                       { "AGE",     "N",  8, 0 },;
 									  { "HBRECNO", "+", 10, 0  } }, "ADORDD" )
 	 //need to include complete path defaults to SET ADO DEFAULT DATABA							  
-     DbCreate( "\test2.mdb;table2", ;
+     DbCreate( "table2;\test2.mdb", ;
 	                                { { "CODID",    "C", 10, 0 },;
 	                                  { "ADDRESS",  "C", 30, 0 },;
                                       { "PHONE",    "C", 30, 0 },;
