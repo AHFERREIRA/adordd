@@ -1,6 +1,25 @@
 # adordd
 adordd for (x)Harbour
 
+15.05.15
+
+Transactions enabled
+Use 
+ADOBEGINTRANS()
+
+ADOCOMMITTRANS()
+
+ADOROLLBACKTRANS() 
+
+Still problems with some browses where the order is by field date type
+
+DBEVAL still didnt solve performance problem its too slow!
+
+Im only trying it with MYSql.
+
+ADORDD its ready! Read Important Notes below.
+
+
 14.05.15
 
 APPEND FROM and COPY TO done! Only for database type dindt test it for Delimiter,SDF, etc. We dont need it.
@@ -74,7 +93,7 @@ Thats all!
 
 IMPORTANT NOTES:
 
-Its very imortant that you indicate in adordd.prg in the several places with the cursorlocation the type of cursor you need to your DB.
+Its very important that you indicate in adordd.prg in the several places with the cursorlocation the type of cursor you need to your DB.
 Not choosing the right cursor the browses become irregular.
 Please remember that all browse positioning is based on absoluteposition thus a cursor that can not support it doesnt work.
 Also you need a cursor that supports update() and requery().
@@ -84,9 +103,8 @@ ACCESS
 MYSQL
 ORACLE
 
-Changes:
-Locks now work as it should.
-Exclusive use in progress not validated
+All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
+Filters can not be evaluated without cFilter expression.
 
 Using Browse() you must pass delete block because it does not lock the record and adorddd raises a lock required error.
 Also when you change the index key value the browse() does not re-position immediately the grid. Click right or left arrows.
