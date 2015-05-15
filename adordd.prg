@@ -148,7 +148,7 @@ ANNOUNCE ADORDD
 #include "dbstruct.ch"
 #include "dbinfo.ch"
 
-#include "hbusrrdd.ch"  //verify that your version has the size of 7 for xarbour at least for 2008 version
+#include "hbusrrdd.ch"  //verify that your version has the array field size of 7 for xarbour at least for 2008 version
 
 #define WA_RECORDSET   1
 #define WA_BOF         2
@@ -1075,7 +1075,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    RETURN IF(lAdded,HB_SUCCESS,HB_FAILURE)
 
    
-//APPEND FROM AND COPY TO   
+//APPEND FROM AND COPY TO  WHEN SRCAREA OPENED WITH ADORDD
 /*
   NEXT NRECORDS LREST NRECORD NOT IMPLEMENTED!
 */
@@ -1086,59 +1086,89 @@ STATIC FUNCTION ADO_TRANS(  nDstArea, aTransInfo )
  LOCAL nFields    := aTransInfo[5] //NFIELDS
  LOCAL SrcArea    := aTransInfo[1] //SOURCE AREA
  LOCAL dstArea    := aTransInfo[2] //DESTINATION AREA
- LOCAL DstTable   := USRRDD_AREADATA( DstArea  )[ WA_TABLENAME ]
+ LOCAL DstTable   := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_TABLENAME ],NIL )
  LOCAL aWAData    := USRRDD_AREADATA( SrcArea )
  LOCAL SrcTable   := aWAData[ WA_TABLENAME ]
  LOCAL n, DstFields := " ", SrcFields := "", cSql := ""
- LOCAL oCn := USRRDD_AREADATA( DstArea  )[ WA_CONNECTION ]
+ LOCAL oCn := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_CONNECTION ],NIL)
  LOCAL oRs := aWAData[ WA_RECORDSET ]
- LOCAL oRsDst := USRRDD_AREADATA( DstArea  )[ WA_RECORDSET ]
- LOCAL currarea := SELECT(), nRecno
+ LOCAL oRsDst := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_RECORDSET ],NIL)
+ LOCAL currarea := SELECT(), nRecno, oError
+ 
  
  DEFAULT  aScopeInfo[UR_SI_BWHILE] TO { ||.T. }
  DEFAULT  aScopeInfo[UR_SI_BFOR]   TO { ||.T. }
+
+  IF (DstArea)->(RDDNAME()) = "ADORDD"
  
-  FOR n := 1 TO nFields //FIELDS FOR SQL EXP
+     FOR n := 1 TO nFields //FIELDS FOR SQL EXP
  
-      IF (dstArea)->(FIELDTYPE(aFields[n,1])) <> "+"  //AUTOINC CANNOT INCLUDE
+         IF (dstArea)->(FIELDTYPE(aFields[n,1])) <> "+"  //AUTOINC CANNOT INCLUDE
 	  
-	     IF n > 1
-		    DstFields += ", "
-		    SrcFields += ", "
-	     ENDIF
+	        IF n > 1
+		       DstFields += ", "
+		       SrcFields += ", "
+	        ENDIF
 	 
-	     DstFields += (dstArea)->(FIELDNAME(aFields[n,1]))
-	     SrcFields += (SrcArea)->(FIELDNAME(aFields[n,2]))
+	        DstFields += (dstArea)->(FIELDNAME(aFields[n,1]))
+	        SrcFields += (SrcArea)->(FIELDNAME(aFields[n,2]))
 		 
-	  ENDIF
+	     ENDIF
 	  
-  NEXT
- 
-  cSql := "INSERT INTO "+DstTable+" ("+DstFields+" ) SELECT "+SrcFields+" FROM "+SrcTable 
+     NEXT
   
+     cSql := "INSERT INTO "+DstTable+" ("+DstFields+" ) SELECT "+SrcFields+" FROM "+SrcTable 
+	 
+  
+  ENDIF
+
   TRY
   
      SELECT(SrcArea)
 	 nRecno := RECNO()
-     DO WHILE EVAL(aScopeInfo[UR_SI_BWHILE]) .AND. !oRs:Eof()
- 
-        IF EVAL(aScopeInfo[UR_SI_BFOR])
-	       //INSERT INTO
-		   oCn:Execute(cSql+;
-		       " WHERE "+oRS:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ CVALTOCHAR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value))
-	    ENDIF
+	 
+     DO WHILE EVAL(aScopeInfo[UR_SI_BWHILE]) .AND.!oRs:Eof()
+        
+		IF EVAL(aScopeInfo[UR_SI_BFOR])
+		
+		   IF (DstArea)->(RDDNAME()) = "ADORDD"
+		   
+	          //INSERT INTO ITS MUCH FASTER!
+		      oCn:Execute(cSql+;
+		          " WHERE "+oRS:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ CVALTOCHAR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value))
+					   
+		   ELSE
+		     
+			  (DstArea)->(DBAPPEND())
+		      FOR n := 1 TO (SrcArea)->(FCOUNT())
+		          IF (DstArea)->( FIELDTYPE(n) ) <> "+"
+		             (DstArea)->( FIELDPUT(n, (SrcArea)->(FIELDGET(n)) ) )
+			      ENDIF	  
+		      NEXT
+	  
+	       ENDIF
+		   
+		ENDIF   
 		
 		oRs:MoveNext()
 		
      ENDDO
+	 
 	 DBGOTO(nRecNo)
 	 
 	 SELECT(currarea)
-	 oRsDst:Requery()
 	 
-  CATCH
+	 IF (DstArea)->(RDDNAME()) = "ADORDD"
+	    oRsDst:Requery()
+	 ENDIF
+	 
+  CATCH oError
   
-    ADOSHOWERROR(oCn)
+     IF (DstArea)->(RDDNAME()) = "ADORDD"
+        ADOSHOWERROR(oCn)
+	 ELSE
+        THROW( oError)
+	 ENDIF
 	
   END
  
@@ -1229,6 +1259,8 @@ STATIC FUNCTION ADO_ZAP( nWA )
          aWAData[ WA_CONNECTION ]:Execute( "DELETE * FROM " + aWAData[ WA_TABLENAME ] )
       END
       oRecordSet:Requery()
+	  aWAData[ WA_EOF] := oRecordSet:Eof()
+	  aWAData[ WA_BOF] := oRecordSet:Bof()
    ENDIF
 
    RETURN HB_SUCCESS
@@ -1255,7 +1287,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
    
    IF aWAData[ WA_EOF ] .OR. rs:EOF .OR. rs:BOF
       xValue := NIL
-	   
+
       IF aFieldInfo[7] == HB_FT_STRING
          xValue := Space( aFieldInfo[3] )
       ENDIF
@@ -1479,7 +1511,7 @@ STATIC FUNCTION ADO_FIELDINFO( nWA, nField, nInfoType, uInfo )
    LOCAL nType, nLen
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
    LOCAL aFieldInfo := ADO_FIELDSTRUCT( oRecordSet, nField-1 )
-   
+ 
    DO CASE
    CASE nInfoType == DBS_NAME
    
@@ -2633,11 +2665,11 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
       ENDIF
 	  
 	  IF lOK
-	  
+
          TRY
-	  
+
             oRs:Resync( adAffectCurrent, adResyncAllValues )
-		 
+
          CATCH
 	  
 	        ADO_RECID(nWa,@nRecNo)
@@ -2890,7 +2922,7 @@ STATIC FUNCTION ADO_FLUSH( nWA )
       oRecordSet:Update()
 	  
    CATCH
-	  
+	   ADOSHOWERROR( USRRDD_AREADATA( nWA )[ WA_CONNECTION ] )
    END
    
 
@@ -2901,45 +2933,48 @@ FUNCTION ADOBEGINTRANS(nWa)
 
  LOCAL oCon := hb_adoRddGetConnection( nWA )
 
- RETURN .T. //TRIALS
- 
-  IF oCon:BeginTrans() > 1 //WE ARE AREADY IN A TRANSACT
-     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
-  ENDIF
+  TRY
+     oCon:BeginTrans()
+  CATCH
+     ADOSHOWERROR(oCon)
+  END
   
   RETURN .T.
 
+  
 FUNCTION ADOCOMMITTRANS(nWa)
 
- LOCAL oCon := hb_adoRddGetConnection( nWA ), n
+ LOCAL oCon := hb_adoRddGetConnection( nWA )
 
- RETURN .T. //TRIALS
- 
-  n := oCon:BeginTrans() 
-  
-  IF n > 1  //WE ARE AREADY IN ATRANSACT
-     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
-  ENDIF
-  IF n > 1 // THERE IS A ACTIVE TRANSACTION IF IT WAS 1 WE WERE NOW OPENING A TRANACT
+  TRY 
      oCon:CommitTrans()
-  ENDIF
-  
+  CATCH
+     ADOSHOWERROR(oCon)
+  END
+
   RETURN .T.
 
+  
 FUNCTION ADOROLLBACKTRANS(nWa) 
 
- LOCAL oCon := hb_adoRddGetConnection( nWA ), n
+ LOCAL oCon := hb_adoRddGetConnection( nWA )
+ LOCAL n,oRs
  
-  RETURN .T. //TRIALS
 
-  n := oCon:BeginTrans() 
+  TRY 
+     oCon:RollBackTrans()
   
-  IF n > 1  //WE ARE AREADY IN ATRANSACT
-     oCon:RollbackTrans() // CLOSE TRANSACT STARTED ABOVE THERE IS NOTHING TO ROLLBACK
-  ENDIF
-  IF n > 1 // THERE IS A ACTIVE TRANSACTION IF IT WAS 1 WE WERE NOW OPENING A TRANACT
-     oCon:RollbackTrans()
-  ENDIF
+     //UPDATE ALL RECORDSETS TO CLEAN THE CANCELED TRANSACTION FROM RECORDSETS 
+     FOR n := 1 TO 255
+         oRs := hb_adoRddGetRecordSet(n)
+         IF VALTYPE(oRs) = "O"
+	 	    oRS:Requery()
+  	     ENDIF   
+     NEXT
+	 
+  CATCH
+     ADOSHOWERROR(oCon)
+  END
 
   RETURN .T.
 /*                                      END TRANSACTION RELATED FUNCTIONS */
@@ -4802,7 +4837,7 @@ FUNCTION ADOLOCKCONTROL(cPath,cRdd)
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.140515/1"
+RETURN "AdoRdd Version 1.150515/1"
 
 /*                   END ADO SET GET FUNCTONS */
    
