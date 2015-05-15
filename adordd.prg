@@ -803,10 +803,10 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
 	  
          IF oRecordSet:Supports(adIndex) .AND. oRecordSet:Supports(adSeek)
 		    oRecordSet:Index := oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name
-			oRecordSet:Seek({ ALLTRIM(STR(nRecord,0)) })
+			oRecordSet:Seek({ ALLTRIM(STR(nRecord,10,0)) })
 		 ELSE
             oRecordSet:MoveFirst()
-		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(nRecord,0)) )
+		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(nRecord,10,0)) )
 		 ENDIF	
          // IF EOF RAISE ERROR
 	  ELSE
@@ -855,10 +855,10 @@ STATIC FUNCTION ADO_GOTOID( nWA, nRecord )
 	  
          IF oRecordSet:Supports(adIndex) .AND. oRecordSet:Supports(adSeek)
 		    oRecordSet:Index := oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name
-			oRecordSet:Seek({ ALLTRIM(STR(nRecord,0)) })
+			oRecordSet:Seek({ ALLTRIM(STR(nRecord,10,0)) })
 		 ELSE
             oRecordSet:MoveFirst()
-		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(nRecord,0)) )
+		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(nRecord,10,0)) )
 	     ENDIF
 		 
 	  ELSE
@@ -1299,7 +1299,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 	  IF aFieldInfo[7] == HB_FT_INTEGER .OR.  aFieldInfo[7] ==  HB_FT_DOUBLE
 	  
 		 IF aFieldInfo[4] > 0
-            xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],0)) )) //VAL("0."+ALLTRIM(STR(aFieldInfo[4],0)))
+            xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],10,0)) )) //VAL("0."+ALLTRIM(STR(aFieldInfo[4],0)))
 		 ELSE
 		    xValue := INT(0)
          ENDIF	
@@ -1363,7 +1363,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 	     IF VALTYPE( xValue ) == "U"
 		 
 		    IF aFieldInfo[4] > 0
-               xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],0)) )) // ALLTRIM(STR(aFieldInfo[4],0)))
+               xValue := VAL("0."+REPLICATE("0",VAL(STR(aFieldInfo[4],10,0)) )) // ALLTRIM(STR(aFieldInfo[4],0)))
 			ELSE
 			   xValue := INT(0)
             ENDIF	
@@ -3161,10 +3161,10 @@ STATIC FUNCTION ADOFINDREC(nWA,aWAdata,oRs,oRecordSet,lFindLast)
 	  
          IF oRecordSet:Supports(adIndex) .AND. oRecordSet:Supports(adSeek)
 		    oRecordSet:Index := oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name
-			oRecordSet:Seek({ ALLTRIM(STR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value,0)) })
+			oRecordSet:Seek({ ALLTRIM(STR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value,10,0)) })
 		 ELSE
 		    oRecordSet:MoveFirst()
-		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value,0)) )
+		    oRecordSet:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value,10,0)) )
          ENDIF
 		 
  	  ELSE
@@ -3511,7 +3511,6 @@ STATIC FUNCTION ADO_RELEVAL( nWA, aRelInfo )
 			
          ELSE
 		    MSGINFO("Relations in ADO SQL with record number are not alloud! See adordd.prg")
-            nReturn := ADO_GOTO( aRelInfo[ UR_RI_CHILD ], uResult )
          ENDIF
       ENDIF
    ENDIF
@@ -4404,7 +4403,7 @@ LOCAL aInfo,nRelArea,cExpRel
       endif				 
 	  x := at(ALLTRIM(UPPER((cAliasCorr)->(fieldname(n))) ),corderexp ) 
 	  if x > 0 //index para campos orderarem pela mesma ordem que indice
-	     aadd(aorders,alltrim(str(x,0))+"->"+upper(cTableName+"."+(cAliasCorr)->(fieldname(n)))+" ASC#% ")
+	     aadd(aorders,alltrim(str(x,3,0))+"->"+upper(cTableName+"."+(cAliasCorr)->(fieldname(n)))+" ASC#% ")
 	 endif
   next
 
@@ -4837,7 +4836,7 @@ FUNCTION ADOLOCKCONTROL(cPath,cRdd)
   
 FUNCTION ADOVERSION()  
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.150515/1"
+RETURN "AdoRdd Version 1.150515/2"
 
 /*                   END ADO SET GET FUNCTONS */
    
