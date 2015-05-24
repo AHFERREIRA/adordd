@@ -8,7 +8,9 @@ adordd for (x)Harbour
 3) You can upload tables to any SQL with:
 
 use "table" via "dbfcdx"
+
 copy "table" to "sqtable"
+
 "use sqltable"
 
 
