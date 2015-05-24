@@ -3,10 +3,35 @@ adordd for (x)Harbour
 
 1) Just add adordd.prg to your project 
 
-2) Set parameters as in tryadordd.prg
+2) Set parameters as in tryadordd.prg (see in adordd.ch for syntax)
+
+3) You can upload tables to any SQL with:
+
+use "table" via "dbfcdx"
+copy "table" to "sqtable"
+"use sqltable"
+
+
+Please note that these operations are very slow because we are still strugling with dbeval to find ou the reason for it.
+
+No code change in your apps with the exceptions of:
+All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
 
 and thats it!
 
+25.5.15
+
+Small bugs corrections.
+
+Dates manipulation corrected.
+
+Scopes working
+
+Filters working just like normal dbf syntax you dont need to change anything.
+
+copy to and append from working
+
+Still problems with speed of dbeval.
 
 15.05.15
 
@@ -105,7 +130,7 @@ No code change required.
 Exceptions:
 
 All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
-Filters can not be evaluated without cFilter expression.
+
 
 Thats all!
 
