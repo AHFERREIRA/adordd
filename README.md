@@ -9,17 +9,25 @@ adordd for (x)Harbour
 
 use "table" via "dbfcdx"
 
-copy "table" to "sqtable"
+copy "table" to "sqtable" via "adordd
 
 "use sqltable"
 
-
-Please note that these operations are very slow because we are still strugling with dbeval to find ou the reason for it.
 
 No code change in your apps with the exceptions of:
 All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
 
 and thats it!
+
+12.06.15
+
+adordd its ready.
+
+Filters working just like any other rdd.
+
+Performance improvments
+
+Small bugs corrections
 
 25.5.15
 
