@@ -228,9 +228,10 @@
 #define adResyncAllValues                 2  /* Default. Overwrites data, and pending updates are canceled.*/
 #define adResyncUnderlyingValues          1  /* Does not overwrite data, and pending updates are not canceled.*/
 
+//you can provide connection string as <cTable>@connection string
 #command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
-            [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
+             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
             [ FROM DATABASE <(db)> ] ;
             [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, MSSQL, FIREBIRD, POSTGRE, ANYWHERE, DBASE, SQLITE, FOXPRO, ADS> ];
             [ FROM SERVER <cServer> ] ;
@@ -242,7 +243,7 @@
          [ hb_adoSetQuery( <cQuery> ) ; ] ;
          [ hb_adoSetUser( <cUser> ); hb_adoSetPassword( <cPassword> ) ; ] ;
          dbUseArea( <.nw.>, <rdd>, <(cTable)>, <(a)>, ;
-                    iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> [, <cp>] ) ;
+                    iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> , [<cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
 
@@ -256,6 +257,7 @@
 #command SET ADO DEFAULT DATABASE TO <cDB> [SERVER TO <cServer>] ENGINE TO <cEngine> [USER TO <cUser>];
   [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */  
+#command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/  
 
 /*		 TODO
 
