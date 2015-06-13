@@ -14,7 +14,9 @@ use "table" via "dbfcdx"
 
 copy "table" to "sqtable" via "adordd
 
-"use sqltable"
+use "sqltable" //use with set connection string
+or
+use sqltable@connection string
 
 
 No code change in your apps with the exceptions of:
