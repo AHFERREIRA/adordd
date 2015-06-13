@@ -19,6 +19,18 @@ copy "table" to "sqtable" via "adordd
 
 No code change in your apps with the exceptions of:
 All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
+Deleted records are immediatly out of the table and can not be recovered again.
+Thus any operations on deleted records must occour before delete the record or an error will occour.
+Operations like:
+
+delete all
+while...
+  if lconditon
+     recall record
+must be inverted
+while....
+  if !lcondtion
+     delet record
 
 and thats it!
 
