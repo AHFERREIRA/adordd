@@ -1,7 +1,10 @@
 # adordd
 adordd for (x)Harbour
 
-1) Just add adordd.prg to your project 
+If you are working with Harbour please move all STATICS top dordd.prg before  #ifndef __XHARBOUR__
+otherwise youll get compile error.
+
+1) Just add adordd.prg to your project and include adordd.ch
 
 2) Set parameters as in tryadordd.prg (see in adordd.ch for syntax)
 
