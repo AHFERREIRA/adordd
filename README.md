@@ -83,8 +83,11 @@ use "sqltable" //use with set connection string
 or
 use sqltable@connection string
 
+//you can use a table in a new connection
+use "ctable@connection string" alias "whatever"
 
 No code change in your apps with the exceptions of:
+
 All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
 
 Deleted records are immediatly out of the table and can not be recovered again.
