@@ -10,7 +10,7 @@ adordd for (x)Harbour
  
  This Set is used by the SQL engine to build select with order by.
  
- Thus the fields must be separated by comma and in can include SQL functions or ASC DESC
+ Thus the fields must be separated by comma and it can include SQL functions or ASC DESC
  
  EX:
  
