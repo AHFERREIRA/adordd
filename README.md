@@ -26,6 +26,7 @@ To start working:
  This Set is used by the SQL engine to build select with order by.
  
  Thus the fields must be separated by comma and it can include SQL functions or ASC DESC
+ This SEt can not include clipper functions as they are unkown to SQL.
  
  EX:
  
