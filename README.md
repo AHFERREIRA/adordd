@@ -32,7 +32,9 @@ To start working:
  
 SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST DESC"} }, {"TABLE2" ,{"CODID","CODID"}} }
 
-B) SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","STR(CODID,2,0)"}} }
+B) SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","STR(CODID,2,0)+FIRST"}} }
+
+iNSTEAD OF COMMAS USE AS IN CLIPPER +
 
 This Set is used to evaluate clipper expressions such as:
 
