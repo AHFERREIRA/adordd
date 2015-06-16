@@ -104,6 +104,22 @@ use sqltable@connection string
 //you can use a table in a new connection
 use "ctable@connection string" alias "whatever"
 
+4) Funtions you can call in adordd.prg to use in our app :
+
+ ADOVERSION() Returns adordd version
+ ADOSEEKSQL( nWA, lSoftSeek, cKey, lFindLast ) //returns a set of records meeting seek key
+ ADOBEGINTRANS(nWa)
+ ADOCOMMITTRANS(nWa)
+ ADOROLLBACKTRANS(nWa) 
+ ADORESETSEEK( nWa ) //resets the recodset to previous before call ADOSEEKSQL()
+
+ hb_adoRddGetConnection( nWorkArea ) Returns the connection for the workarea
+ hb_adoRddGetRecordSet( nWorkArea )  Returns the recordset for the nWorkArea 
+ hb_adoRddGetTableName( nWorkArea )  Returns tabe name for the nWorkArea  
+ hb_adoRddExistsTable( oCon,cTable, cIndex ) Returns .t. if table or table and index exist on the DB
+ hb_adoRddDrop( oCon, cTable, cIndex, DBEngine ) Drops (delete) table or index in the DB
+ hb_GetAdoConnection() Returns ado default connection
+
 No code change in your apps with the exceptions of:
 
 All expressions with variables for ex. index expressions the vars must be evaluated before sending it to adordd.
