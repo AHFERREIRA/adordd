@@ -63,9 +63,11 @@ E) SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
 
 This Set indicates the default field name to be used as recno in all tables besides the mentioned above.
 
+If you have the same field in all tables can only use this set.
+
 ATTENTION:
 
-The D and E sets are absolutly necessary and without them the navigation with adordd might be unpredictable.
+The D and or E sets are absolutly necessary and without them the navigation with adordd might be unpredictable.
 
 F) SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TEST2.mdb" SERVER TO "CSEVER" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
 
