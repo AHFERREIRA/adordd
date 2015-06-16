@@ -1,6 +1,8 @@
 # adordd
 adordd for (x)Harbour its ready!
 
+PLEASE MAKE A DONATION!
+
 We will all profit for sure from such development so I think its fair to ask everyone to contribute with a minimal 
 importance of 20 Euros (because of the paypal costs) for a good cause.
 Go to ajusera.com scroll down and click PayPal button "Doar" 
