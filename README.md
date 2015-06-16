@@ -1,6 +1,18 @@
 # adordd
-adordd for (x)Harbour
 
+We will all profit for sure from such development so I think its fair to ask everyone to contribute with a minimal 
+importance of 20 Euros (because of the paypal costs) for a good cause.
+Go to ajusera.com scroll down and click PayPal button "Doar" 
+They can send you a contribution receipt if you send them a email with your details.
+
+This is a non profit organization that performs an important social work supporting the elderly, 
+young problematic, food distribution to the needy, etc.
+This organization is based on the work of Father Jeronimo Usera (spanish) well known in
+Spain, Portugal and South America.
+
+You can get more information at ajusera.com (sorry its only in portuguese)
+
+adordd for (x)Harbour its ready!
 
 1) Just add adordd.prg to your project and include adordd.ch
 
