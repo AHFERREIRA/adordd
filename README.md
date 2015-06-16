@@ -34,11 +34,11 @@ Indicates the names used for temporay files at SQL level.
 
 It must start by TMP or TEMp but can be "TMPROGER"
 
-These temporary fies mainy used or temporary indexes are created in the SQL sever as TEMPORARY and automaticly destroied
+These temporary fies are mainy used for temporary indexes are created in the SQL sever as TEMPORARY and automaticly destroied
 
 after connection ends.
 
-The are only visible to the user that creted them.
+They are only visible to the user that created them.
 
 D) SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
 
@@ -46,33 +46,33 @@ This Set lets you indicate a diferent autoinc field of the defaut per table to b
 
 E) SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
 
-This Set indicates the default field ame to be used as recno in all tables besides the mentioned above.
+This Set indicates the default field name to be used as recno in all tables besides the mentioned above.
 
 ATTENTION:
 
-The D ad E sets are absolutly necessary and without them the navigation with adordd might be unpredictable.
+The D and E sets are absolutly necessary and without them the navigation with adordd might be unpredictable.
 
 F) SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TEST2.mdb" SERVER TO "CSEVER" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
 
-This Set inidcates the default server and database we are using.
+This Set inidcates the default server and database and parameters we are using.
 
 Connection get established here.
 
 G)  SET ADO LOCK CONTROL SHAREPATH TO  "D:\WHATEVER" RDD TO "DBFCDX"
 
-This set enables adordd to asure locking records and exclusive use of files as any other rdd.
+This set enables adordd to assure locking records and exclusive use of files as any other rdd.
 
-You need to supply a path where adord creates th tlocks file to control this.
+You need to supply a path where adordd creates the tlocks file to control this.
 
 This rdd file must be a rdd working with locks as ex dbfcdx.
 
-This is not a SQL table and if you need to work in WAN and need lock control you will need:
+This is not a SQL table and if you need to work in WAN and need lock control you will need to:
 
 The connection to SQL server
 
 and
 
-Ex a VPN where you can acess this share.
+Ex a VPN where you can access this share.
 
 3) You can upload tables to any SQL with:
 
