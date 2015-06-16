@@ -9,7 +9,7 @@
  * Copyright 2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
  * Constant Group: Supports
  * COMANDS AFTER LOCATE
- * 
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2, or (at your option)
@@ -228,7 +228,9 @@
 #define adResyncAllValues                 2  /* Default. Overwrites data, and pending updates are canceled.*/
 #define adResyncUnderlyingValues          1  /* Does not overwrite data, and pending updates are not canceled.*/
 
-//you can provide connection string as <cTable>@connection string
+/* not needed anymore all defined in SET ADO DEFAULT DATABASE OR you can provide connection string as <cTable>@connection string
+// USE CTABLE@CON STRING
+
 #command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
              [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
@@ -246,20 +248,20 @@
                     iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> , [<cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
+*/
 
-	 
 /* sets for adordd */
 #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
-#command SET ADO DEFAULT DATABASE TO <cDB> [SERVER TO <cServer>] ENGINE TO <cEngine> [USER TO <cUser>];
-  [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/		 
-#command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */  
-#command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/  
+#command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> [USER TO <cUser>];
+  [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/
+#command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
+#command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
 
-/*		 TODO
+/* TODO
 
 #command COPY [STRUCTURE] [EXTENDED] [TO <(f)>] => __dbCopyXStruct( <(f)> )
 
