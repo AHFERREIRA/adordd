@@ -35,7 +35,6 @@ Indicates the names used for temporay files at SQL level.
 It must start by TMP or TEMp but can be "TMPROGER"
 
 These temporary fies are mainy used for temporary indexes are created in the SQL sever as TEMPORARY and automaticly destroied
-
 after connection ends.
 
 They are only visible to the user that created them.
