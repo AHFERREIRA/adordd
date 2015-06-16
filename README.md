@@ -1,4 +1,5 @@
 # adordd
+adordd for (x)Harbour its ready!
 
 We will all profit for sure from such development so I think its fair to ask everyone to contribute with a minimal 
 importance of 20 Euros (because of the paypal costs) for a good cause.
@@ -12,7 +13,7 @@ Spain, Portugal and South America.
 
 You can get more information at ajusera.com (sorry its only in portuguese)
 
-adordd for (x)Harbour its ready!
+To start working:
 
 1) Just add adordd.prg to your project and include adordd.ch
 
