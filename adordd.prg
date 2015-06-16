@@ -406,8 +406,10 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
                     aWAData[ WA_CONNECTION ]:Open( "Provider=SQLOLEDB;" + ;
                                                    "server=" + aWAData[ WA_SERVER ] + ;
                                                    ";database=" + t_cDataSource  + ;
+                                                   IF( EMPTY( aWAData[ WA_USERNAME ] ),;
+                                                   ";Trusted_Connection=yes",;
                                                    ";uid=" + aWAData[ WA_USERNAME ] + ;
-                                                   ";pwd=" + aWAData[ WA_PASSWORD ] )
+                                                   ";pwd=" + aWAData[ WA_PASSWORD ] ) )
 
                CASE aWAData[ WA_ENGINE ] == "ORACLE"
                     aWAData[ WA_CONNECTION ]:Open( "Provider=MSDAORA.1;" + ;
