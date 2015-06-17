@@ -1,5 +1,5 @@
 # adordd
-adordd for (x)Harbour its ready! Read carefully to start working with adordd.
+adordd for (x)Harbour its ready! 
 
 PLEASE MAKE A DONATION!
 
