@@ -15,7 +15,9 @@ Spain, Portugal and South America.
 
 You can get more information at ajusera.com (sorry its only in portuguese)
 
-To start working please check readme.pdf or leame.pdf
+To start working please check readme.pdf or leeme.pdf
+
+17.05.15
 
 
 
