@@ -5,7 +5,7 @@ PLEASE MAKE A DONATION!
 
 We will all profit for sure from such development so I think its fair to ask everyone to contribute with a minimal 
 importance of 20 Euros (because of the paypal costs) for a good cause.
-Go to ajusera.com scroll down and click PayPal button "Doar" 
+Go to http://ajusera.com scroll down and click PayPal button "Doar" 
 They can send you a contribution receipt if you send them a email with your details.
 
 This is a non profit organization that performs an important social work supporting the elderly, 
