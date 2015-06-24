@@ -207,13 +207,13 @@
 #define adSearchForward                 1
 
 /* Transactions */
-#define adXactAbortRetaining                     262144 /*Performs retaining aborts by calling RollbackTrans to automatically start a new transaction. Not all providers support this behavior.*/
-#define adXactCommitRetaining                    131072 /*Performs retaining commits by calling CommitTrans to automatically start a new transaction. Not all providers support this behavior.*/
+#define adXactAbortRetaining    262144 /*Performs retaining aborts by calling RollbackTrans to automatically start a new transaction. Not all providers support this behavior.*/
+#define adXactCommitRetaining   131072 /*Performs retaining commits by calling CommitTrans to automatically start a new transaction. Not all providers support this behavior.*/
 
 /*Position Enum*/
-#define adPosBOF                        -2 /*Indicates that the current record pointer is at BOF (that is, the BOF property is True).*/
-#define adPosEOF                        -3 /*Indicates that the current record pointer is at EOF (that is, the EOF property is True).*/
-#define adPosUnknown                    -1 /*Indicates that the Recordset is empty, the current position is unknown, or the provider does not support the AbsolutePage or AbsolutePosition property.*/
+#define adPosBOF                -2 /*Indicates that the current record pointer is at BOF (that is, the BOF property is True).*/
+#define adPosEOF                -3 /*Indicates that the current record pointer is at EOF (that is, the EOF property is True).*/
+#define adPosUnknown            -1 /*Indicates that the Recordset is empty, the current position is unknown, or the provider does not support the AbsolutePage or AbsolutePosition property.*/
 
 /*Resync AffectEnum */
 #define adAffectAll               3  /* If there is not a Filter applied to the Recordset, affects all records.
@@ -225,11 +225,14 @@
 #define adAffectGroup             2  /* Affects only records that satisfy the current Filter property setting. You must set the Filter property to a FilterGroupEnum value or an array of Bookmarks to use this option.*/
 
 /* Resync Enum*/
-#define adResyncAllValues                 2  /* Default. Overwrites data, and pending updates are canceled.*/
-#define adResyncUnderlyingValues          1  /* Does not overwrite data, and pending updates are not canceled.*/
+#define adResyncAllValues         2  /* Default. Overwrites data, and pending updates are canceled.*/
+#define adResyncUnderlyingValues  1  /* Does not overwrite data, and pending updates are not canceled.*/
 
-/* not needed anymore all defined in SET ADO DEFAULT DATABASE OR you can provide connection string as <cTable>@connection string
-// USE CTABLE@CON STRING
+/*Field Staus */
+#define adFieldPendingChange      4 /* Indicates either that the field has been deleted and then re-added, perhaps with a different data type, or that the value of the field which previously had a status of adFieldOK has changed. The final form of the field will modify the Fields collection after the Update method is called./*
+
+
+//YOU CAN ALSO USE CTABLE@CON STRING
 
 #command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
@@ -248,7 +251,7 @@
                     iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> , [<cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
-*/
+
 
 /* sets for adordd */
 #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
@@ -261,9 +264,5 @@
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
 #command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
 
-/* TODO
 
-#command COPY [STRUCTURE] [EXTENDED] [TO <(f)>] => __dbCopyXStruct( <(f)> )
-
-*/
 #endif
