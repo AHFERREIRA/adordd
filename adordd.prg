@@ -30,7 +30,7 @@
  *
  * Copyright 2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
  *
- * Most part has been rewriten with a diferent kind of approach
+ * Most part has been completly rewriten with a diferent kind of approach
  * not deal with Catalogs File indexes - DBA responsability
  * converting indexes to selects and treat indexes as "virtual" as they really dont exist as files
  *
@@ -206,6 +206,12 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
    ENDIF
 
+   //24.06.15 APPEND FROM
+   IF PROCNAME( 1 ) == "__DBAPP"
+      aOpenInfo[ UR_OI_ALIAS ] := cGetNewAlias( aOpenInfo[ UR_OI_ALIAS ] )
+
+   ENDIF
+
    IF !ADOCON_CHECK()
       RETURN HB_FAILURE
 
@@ -272,8 +278,8 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    ENDIF
 
    //PROPERIES AFFECTING PERFORMANCE TRY
-   oRecordSet:CacheSize := 30 //records increase performance set zero returns error set great server parameters max open rows error
-   //oRecordSet:MaxRecords := 100
+   //oRecordSet:CacheSize := 30 //records increase performance set zero returns error set great server parameters max open rows error
+   //oRecordSet:MaxRecords := 100 //= to top 100 or limit 100
 
    IF oRecordSet:CursorLocation = adUseClient
       //THIS CAN INFLUENCE PERFORMANCE VERY MUCH IT SHOULD BE SUPPORTED BY ALL PROVIDERS
@@ -288,12 +294,11 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
    ENDIF
 
-
    IF aWAData[ WA_QUERY ] == "SELECT * FROM "
       oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ], aWAData[ WA_CONNECTION ])
 
    ELSE
-      oRecordSet:Open( aWAData[ WA_QUERY ], aWAData[ WA_CONNECTION ],,,adCmdTableDirect )
+      oRecordSet:Open( aWAData[ WA_QUERY ], aWAData[ WA_CONNECTION ] )
 
    ENDIF
 
@@ -361,7 +366,6 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
          IF EMPTY(oConnection)
             aWAData[ WA_CONNECTION ] :=  TOleAuto():New( "ADODB.Connection" )
             oConnection := aWAData[ WA_CONNECTION ]
-            oConnection:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
             aWAData[ WA_TABLENAME ]  := UPPER(aOpenInfo[ UR_OI_NAME ])
             aWAData[ WA_QUERY ]      := t_cQuery
             aWAData[ WA_USERNAME ]   := t_cUserName
@@ -371,62 +375,9 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
             aWAData[ WA_CONNOPEN ]   := .T.
             aWAData[ WA_CATALOG ]    := t_cDatasource
 
-            DO CASE
-               CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".mdb" .OR. aWAData[ WA_ENGINE ] = "ACCESS"
-                    IF Empty( aWAData[ WA_PASSWORD ] )
-                       aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  )
-                    ELSE
-                       aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  + ";Jet OLEDB:Database Password=" + AllTrim( aWAData[ WA_PASSWORD ] ) )
-                    ENDIF
-
-               CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".xls"
-                    aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource  + ";Extended Properties='Excel 8.0;HDR=YES';Persist Security Info=False" )
-
-               CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 4 ) ) == ".dbf" .OR. aWAData[ WA_ENGINE ] = "ADS"
-                    aWAData[ WA_CONNECTION ]:Open("Provider=Advantage OLE DB Provider;User ID="+aWAData[ WA_USERNAME ] +;
-                                                  ";Data Source="+ t_cDataSource +";TableType=ADS_VFP;"+;
-                                                  "Advantage Server Type=ADS_LOCAL_SERVER;")
-
-                    //OTHE PROVIDERS FOR DBF FOR TRIALS
-                    // aWAData[ WA_CONNECTION ]:Open("Provider=vfpoledb.1;Data Source="+t_cDataSource+";Collating Sequence=machine;")
-                    // aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource + ";Extended Properties=dBASE IV;User ID=Admin;Password=;" )
-
-               CASE Lower( Right( aOpenInfo[ UR_OI_NAME ], 3 ) ) == ".db"
-                    aWAData[ WA_CONNECTION ]:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + t_cDataSource + ";Extended Properties='Paradox 3.x';" )
-
-               CASE aWAData[ WA_ENGINE ] == "MYSQL"
-                    aWAData[ WA_CONNECTION ]:Open( "Driver={mySQL ODBC 5.3 ANSI Driver};" + ;
-                                                   "server=" + aWAData[ WA_SERVER ] + ;
-                                                   ";Port=3306;Option=32"+;
-                                                   ";database=" + t_cDataSource  + ;
-                                                   ";uid=" + aWAData[ WA_USERNAME ] + ;
-                                                   ";pwd=" + aWAData[ WA_PASSWORD ]+";" )
-
-               CASE aWAData[ WA_ENGINE ] == "SQL"
-                    aWAData[ WA_CONNECTION ]:Open( "Provider=SQLOLEDB;" + ;
-                                                   "server=" + aWAData[ WA_SERVER ] + ;
-                                                   ";database=" + t_cDataSource  + ;
-                                                   IF( EMPTY( aWAData[ WA_USERNAME ] ),;
-                                                   ";Trusted_Connection=yes",;
-                                                   ";uid=" + aWAData[ WA_USERNAME ] + ;
-                                                   ";pwd=" + aWAData[ WA_PASSWORD ] ) )
-
-               CASE aWAData[ WA_ENGINE ] == "ORACLE"
-                    aWAData[ WA_CONNECTION ]:Open( "Provider=MSDAORA.1;" + ;
-                                                   "Persist Security Info=False" + ;
-                                                   iif( Empty( aWAData[ WA_SERVER ] ), ;
-                                                       "", ";Data source=" + aWAData[ WA_SERVER ] ) + ;
-                                                   ";User ID=" + aWAData[ WA_USERNAME ] + ;
-                                                   ";Password=" + aWAData[ WA_PASSWORD ] )
-
-               CASE aWAData[ WA_ENGINE ] == "FIREBIRD"
-                    aWAData[ WA_CONNECTION ]:Open( "Driver=Firebird/InterBase(r) driver;" + ;
-                                                   "Persist Security Info=False" + ;
-                                                   ";Uid=" + aWAData[ WA_USERNAME ] + ;
-                                                   ";Pwd=" + aWAData[ WA_PASSWORD ] + ;
-                                                   ";DbName=" + t_cDataSource  )
-
-            ENDCASE
+            //23.06.15
+            ADOOPENCONNECT( aWAData[ WA_CATALOG ], aWAData[ WA_SERVER ], aWAData[ WA_ENGINE ],;
+                            aWAData[ WA_USERNAME ], aWAData[ WA_PASSWORD ] , aWAData[ WA_CONNECTION ] )
 
          ELSE
             // ITS ALREDY OPEN THE ADODB CONN USE THE SAME WE WANT TRANSACTIONS WITHIN THE CONNECTION
@@ -485,6 +436,60 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
   t_cDataSource := NIL  //2.06.15 TO HAVE MULTIPLE DATASORCES OPEN
 
   RETURN HB_SUCCESS
+
+
+// 23.06.15 OPEN THE CONNECTION TO ADOGETCONNECT AND ADOCONNECT
+STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
+
+  oCn:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
+
+  DO CASE
+     CASE cEngine = "ACCESS"
+          IF Empty( t_cPassword )
+             oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  )
+           ELSE
+              oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  + ";Jet OLEDB:Database Password=" + AllTrim( cUser ) )
+           ENDIF
+
+     CASE cEngine = "ADS"
+          oCn:Open("Provider=Advantage OLE DB Provider;User ID="+cUser +;
+                    ";Data Source="+ cDB +";TableType=ADS_VFP;"+;
+                    "Advantage Server Type=ADS_LOCAL_SERVER;")
+
+     CASE cEngine == "MYSQL"
+          oCn:Open( "Driver={mySQL ODBC 5.3 ANSI Driver};" + ;
+                    "server=" + cServer + ;
+                    ";Port=3306;Option=32"+;
+                    ";database=" + cDB  + ;
+                    ";uid=" + cUser + ;
+                    ";pwd=" + cPass+";" )
+
+     CASE  cEngine == "MSSQL"
+           oCn:Open( "Provider=SQLOLEDB;" + ;
+                     "server=" + cServer + ;
+                     ";database=" + cDB  + ;
+                     iif(empty(cUser),";Trusted_Connection=yes",;
+                         ";uid=" + cUser + ;
+                         ";pwd=" + cPass ) )
+
+     CASE cEngine == "ORACLE"
+          oCn:Open( "Provider=MSDAORA.1;" + ;
+                    "Persist Security Info=False" + ;
+                    iif( Empty( cServer ), ;
+                        "", ";Data source=" + cServer ) + ;
+                        ";User ID=" + cUser + ;
+                        ";Password=" + cPass )
+
+     CASE cEngine == "FIREBIRD"
+          oCn:Open( "Driver=Firebird/InterBase(r) driver;" + ;
+                    "Persist Security Info=False" + ;
+                    ";Uid=" + cUser + ;
+                    ";Pwd=" + cPass + ;
+                    ";DbName=" + cDB  )
+
+  ENDCASE
+
+  RETURN oCn
 
 
 FUNCTION ADODB_CLOSE()
@@ -551,6 +556,7 @@ STATIC FUNCTION ADO_CLOSE( nWA )
    aWAData[WA_LOCKSCHEME ] := ADOFORCELOCKS()  //no lock type 999
    aWAData[WA_CFILTERACTIVE ] := ""
    aWAData[WA_LREQUERY] := .F.
+   aWAData[WA_RECORDSET] := NIL //18.6.15 cleaning
 
    RETURN UR_SUPER_CLOSE( nWA )
 
@@ -1064,21 +1070,17 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 /*
   NEXT NRECORDS LREST NRECORD NOT IMPLEMENTED!
 */
-STATIC FUNCTION ADO_TRANS(  nDstArea, aTransInfo )
+STATIC FUNCTION ADO_TRANS(  nWA, aTransInfo )
 
  LOCAL aScopeInfo := aTransInfo[3] //SCOPE ARRAY
  LOCAL aFields    := aTransInfo[6] //FIELDPOS EACH AREA EST AND SOURCE {FIELDPOS SOURCE, FIELDPOS DESTINTION}
  LOCAL nFields    := aTransInfo[5] //NFIELDS
  LOCAL SrcArea    := aTransInfo[1] //SOURCE AREA
  LOCAL dstArea    := aTransInfo[2] //DESTINATION AREA
- LOCAL DstTable   := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_TABLENAME ],NIL )
- LOCAL aWAData    := USRRDD_AREADATA( SrcArea )
- LOCAL SrcTable   := aWAData[ WA_TABLENAME ]
- LOCAL n, DstFields := " ", SrcFields := "", cSql := ""
- LOCAL oCn := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_CONNECTION ],NIL)
+ LOCAL aWAData    := USRRDD_AREADATA( nWA )
  LOCAL oRs := aWAData[ WA_RECORDSET ]
- LOCAL oRsDst := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_RECORDSET ],NIL)
- LOCAL currarea := SELECT(), nRecno, oError
+ //LOCAL oRsDst := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_RECORDSET ],NIL)
+ LOCAL nRecno, oError
 
  DEFAULT  aScopeInfo[UR_SI_BWHILE] TO { ||.T. }
  DEFAULT  aScopeInfo[UR_SI_BFOR]   TO { ||.T. }
@@ -1087,74 +1089,36 @@ STATIC FUNCTION ADO_TRANS(  nDstArea, aTransInfo )
      RETURN HB_FAILURE
   ENDIF
 
-  IF (DstArea)->(RDDNAME()) = "ADORDD"
+  SELECT(SrcArea)
+  nRecno := RECNO()
 
-     FOR n := 1 TO nFields //FIELDS FOR SQL EXP
-         IF (dstArea)->(FIELDTYPE(aFields[n,1])) <> "+"  //AUTOINC CANNOT INCLUDE
-            IF n > 1
-               DstFields += ", "
-               SrcFields += ", "
+  DO WHILE EVAL( aScopeInfo[UR_SI_BWHILE] ) .AND.!oRs:Eof()
+     IF EVAL(aScopeInfo[UR_SI_BFOR])
+        (DstArea)->(DBAPPEND())
+        FOR n := 1 TO (SrcArea)->(FCOUNT())
+            IF (DstArea)->( FIELDTYPE(n) ) <> "+"
+               (DstArea)->( FIELDPUT(n, (SrcArea)->(FIELDGET(n)) ) )
              ENDIF
 
-             DstFields += (dstArea)->(FIELDNAME(aFields[n,1]))
-             SrcFields += (SrcArea)->(FIELDNAME(aFields[n,2]))
+        NEXT
 
-          ENDIF
+     ENDIF
 
-     NEXT
+     oRs:MoveNext()
 
-     cSql := "INSERT INTO "+DstTable+" ("+DstFields+" ) SELECT "+SrcFields+" FROM "+SrcTable
+  ENDDO
 
+  DBGOTO(nRecNo)
+
+  SELECT( nWA )
+
+  IF PROCNAME( 1 ) == "__DBCOPY"
+     (DstArea)->( DBCLOSEAREA() )
+
+  ELSEIF PROCNAME( 1 ) == "__DBAPP"
+     (SrcArea)->( DBCLOSEAREA() )
 
   ENDIF
-
-  TRY
-     SELECT(SrcArea)
-     nRecno := RECNO()
-
-     DO WHILE EVAL( aScopeInfo[UR_SI_BWHILE] ) .AND.!oRs:Eof()
-        IF EVAL(aScopeInfo[UR_SI_BFOR])
-           IF (DstArea)->(RDDNAME()) = "ADORDD"
-              //INSERT INTO ITS MUCH FASTER!
-              oCn:Execute( cSql+;
-                         " WHERE "+oRS:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ CVALTOCHAR(oRS:Fields(aWAData[WA_FIELDRECNO]):Value))
-           ELSE
-              (DstArea)->(DBAPPEND())
-              FOR n := 1 TO (SrcArea)->(FCOUNT())
-                  IF (DstArea)->( FIELDTYPE(n) ) <> "+"
-                     (DstArea)->( FIELDPUT(n, (SrcArea)->(FIELDGET(n)) ) )
-                  ENDIF
-
-               NEXT
-
-           ENDIF
-
-        ENDIF
-
-        oRs:MoveNext()
-
-     ENDDO
-
-     DBGOTO(nRecNo)
-
-     SELECT(currarea)
-
-     IF (DstArea)->(RDDNAME()) = "ADORDD"
-        oRsDst:Requery()
-
-     ENDIF
-
-  CATCH oError
-
-     IF (DstArea)->(RDDNAME()) = "ADORDD"
-        ADOSHOWERROR(oCn)
-
-     ELSE
-        THROW( oError)
-
-     ENDIF
-
-  END
 
 
   RETURN HB_SUCCESS
@@ -1359,7 +1323,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
          IF VALTYPE( xValue ) == "U" .OR. FW_TTOD( xValue ) == {^ 1899/12/30 }
             xValue := CTOD('')
          ELSE
-            //xValue := FW_TTOD( xValue )
+            xValue := FW_TTOD( xValue ) //24.06.15 WAS DISABLE BY MISTAKE DURING TRIALS
          ENDIF
 
       ENDIF
@@ -1484,19 +1448,47 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
             //VERSION XHARBOUR
             IF ADO_FIELDSTRUCT( oRecordSet, nField-1 )[2] $ "DT" //14.6.15 .AND.  VALTYPE( xValue )   <> "O"
                aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
-               oRecordSet:Fields( nField - 1 ):Name+" = "+;
-               IF( VALTYPE( xValue )   <> "O", "'"+CVALTOCHAR( xValue )+"'", 'NULL' )+""+;
-                   " WHERE "+oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ) )
+               ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ), ;
+                                aWAData[ WA_ENGINE ] ) + " = " +;
+               IF( VALTYPE( xValue )   <> "O", "'"+CVALTOCHAR( xValue )+"'", 'NULL' )+;
+                   " WHERE " + ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
+                                                aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ) )
+
                oRecordSet:Resync( adAffectCurrent, adResyncAllValues )
 
             ELSE
-               oRecordSet:Fields( nField - 1 ):Value := xValue
-               oRecordSet:Update()
+               IF aWAData[ WA_LOCKSCHEME ] // 18.06.15 to work safely without locks
+                  oRecordSet:Fields( nField - 1 ):Value := xValue
+                  oRecordSet:Update()
+
+               ELSE // 18.06.15 to work safely without locks
+                  DO CASE
+                     CASE VALTYPE ( xValue ) = "L"
+                          IF( xValue, xValue := 1, xValue := 0 )
+                          xValue := CVALTOCHAR( xValue )
+                     CASE VALTYPE ( xValue ) = "N"
+                          xValue := CVALTOCHAR( xValue )
+                     OTHERWISE
+                          xValue := "'"+xValue+"'"
+                   ENDCASE
+
+                   aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
+                       ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ),;
+                       aWAData[ WA_ENGINE ] )  + " = " + xValue +" WHERE "+;
+                       ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
+                                        aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ) )
+
+                   oRecordSet:Resync( adAffectCurrent, adResyncAllValues )
+
+               ENDIF
 
             ENDIF
 
             IF VALTYPE( aWAData[ WA_FILTERACTIVE ] ) == "B" .AND.  ! EVAL(  aWAData[ WA_FILTERACTIVE ] )
                //as soon as we alter expresson filter of the record
+               //TO BE RQUERIED AT ADO_UNLOCK THIS IS THE STANDARD CLIEPPER
+               //PROCEDURE LOCK WRITE UNLOCK IFYOU DONT DO IT
+               // IT WILL NOT ERROR BUT IT WILL NOT WORK CORRECTLY
                aWAData[ WA_LREQUERY ] := .T.
             ENDIF
 
@@ -2690,76 +2682,75 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
 
    ENDIF
 
-   IF !aWData[WA_LOCKSCHEME ]
-      aWdata[ WA_FILELOCK ] := NIL
-      aWdata[ WA_LOCKLIST ] := {}
-      aLockInfo[ UR_LI_RESULT ] := .T.
-      RETURN HB_SUCCESS
+   IF aWData[WA_LOCKSCHEME ]//18.06.15 WORKING WITHOUT LOCKS BUT KEEPING LOCK ARRAY
 
-   ENDIF
-
-   //IF WE TRY TO GETVALUE AND RESYNC NOT POSSIBLE RECORD DELETED WE ARE AT EOF
-   IF oRs:Eof() .AND. PROCNAME(1) <> "ADO_APPEND"
-      aLockInfo[ UR_LI_RESULT ] := .F.
-      RETURN HB_FAILURE
-
-   ENDIF
-
-   IF (VALTYPE(aWdata[WA_OPENSHARED]) = "L"  .AND. !aWdata[WA_OPENSHARED]) .OR. aWdata[ WA_FILELOCK ]
-       aLockInfo[ UR_LI_RESULT ] := .T.
-       RETURN HB_SUCCESS
-
-   ENDIF
-
-   //FILE LOCK WE DONT NEED TO CHECK ANYTHING ELSE
-   IF aLockInfo[UR_LI_METHOD] = DBLM_FILE
-      IF !aWdata[ WA_FILELOCK ]
-         ADO_UNLOCK( nWA )
-
-         IF !ADO_GETLOCK(aWdata[WA_TABLENAME],"ZWTXFL",nWA)
-            lOk := .F.
-         ENDIF
+      //IF WE TRY TO GETVALUE AND RESYNC NOT POSSIBLE RECORD DELETED WE ARE AT EOF
+      IF oRs:Eof() .AND. PROCNAME(1) <> "ADO_APPEND"
+         aLockInfo[ UR_LI_RESULT ] := .F.
+         RETURN HB_FAILURE
 
       ENDIF
 
-      ADO_RECID(nWa,@nRecNo)
-      oRs:Requery()
-      ADO_SETFILTER( nWA, aWData[ WA_FILTERACTIVE ] )
-      ADO_GOTO(nWA,nRecNo)
-
-   ELSE
-      IF EMPTY(aLockInfo[ UR_LI_RECORD ])
-         ADO_UNLOCK( nWA )
-         ADO_RECID(nWa,@nRecNo)
-         aLockInfo[ UR_LI_RECORD ] := nRecNo
+      IF (VALTYPE(aWdata[WA_OPENSHARED]) = "L"  .AND. !aWdata[WA_OPENSHARED]) .OR. aWdata[ WA_FILELOCK ]
+         aLockInfo[ UR_LI_RESULT ] := .T.
+         RETURN HB_SUCCESS
 
       ENDIF
 
-      IF ASCAN(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ]) = 0
-         IF !ADO_GETLOCK(aWdata[WA_TABLENAME],aLockInfo[ UR_LI_RECORD ] ,nWA)
-            lOk := .F.
-         ENDIF
-      ENDIF
+      //FILE LOCK WE DONT NEED TO CHECK ANYTHING ELSE
+      IF aLockInfo[UR_LI_METHOD] = DBLM_FILE
+         IF !aWdata[ WA_FILELOCK ]
+            ADO_UNLOCK( nWA )
 
-      IF lOK
-         TRY
-            oRs:Resync( adAffectCurrent, adResyncAllValues )
-
-         CATCH
-            ADO_RECID(nWa,@nRecNo)
-            oRs:Requery()
-            ADO_SETFILTER( nWA, aWData[ WA_FILTERACTIVE ] )
-            ADO_GOTO(nWA,aLockInfo[ UR_LI_RECORD ])
-
-            //NOT A NEW RECORD AND NOT DELETED
-            IF aLockInfo[ UR_LI_RECORD ] <= ADORECCOUNT(nWA,oRs) .AND. nRecno <> aLockInfo[ UR_LI_RECORD ]
-               ADO_UNLOCK( nWA, aLockInfo[ UR_LI_RECORD ] )
+            IF !ADO_GETLOCK(aWdata[WA_TABLENAME],"ZWTXFL",nWA)
                lOk := .F.
             ENDIF
 
-         END
+         ENDIF
+
+         ADO_RECID(nWa,@nRecNo)
+         oRs:Requery()
+         ADO_SETFILTER( nWA, aWData[ WA_FILTERACTIVE ] )
+         ADO_GOTO(nWA,nRecNo)
+
+      ELSE
+         IF EMPTY(aLockInfo[ UR_LI_RECORD ])
+            ADO_UNLOCK( nWA )
+            ADO_RECID(nWa,@nRecNo)
+            aLockInfo[ UR_LI_RECORD ] := nRecNo
+
+         ENDIF
+
+         IF ASCAN(aWdata[ WA_LOCKLIST ],aLockInfo[ UR_LI_RECORD ]) = 0
+            IF !ADO_GETLOCK(aWdata[WA_TABLENAME],aLockInfo[ UR_LI_RECORD ] ,nWA)
+               lOk := .F.
+            ENDIF
+         ENDIF
+
+         IF lOK
+            TRY
+               oRs:Resync( adAffectCurrent, adResyncAllValues )
+
+            CATCH
+               ADO_RECID(nWa,@nRecNo)
+               oRs:Requery()
+               ADO_SETFILTER( nWA, aWData[ WA_FILTERACTIVE ] )
+               ADO_GOTO(nWA,aLockInfo[ UR_LI_RECORD ])
+
+               //NOT A NEW RECORD AND NOT DELETED
+               IF aLockInfo[ UR_LI_RECORD ] <= ADORECCOUNT(nWA,oRs) .AND. nRecno <> aLockInfo[ UR_LI_RECORD ]
+                  ADO_UNLOCK( nWA, aLockInfo[ UR_LI_RECORD ] )
+                  lOk := .F.
+               ENDIF
+
+            END
+
+         ENDIF
 
       ENDIF
+
+   ELSE
+      lOk := .T.
 
    ENDIF
 
@@ -2805,18 +2796,14 @@ STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
 
    ENDIF
 
-   IF !aWData[WA_LOCKSCHEME ]
-      aWdata[ WA_FILELOCK ] := NIL
-      aWdata[ WA_LOCKLIST ] := {}
-      RETURN HB_SUCCESS
+   IF aWData[WA_LOCKSCHEME ]//18.06.15 WORKING WITHOUT LOCKS BUT KEEPING LOCK ARRAY
+      IF !EMPTY(xRecID)
+         ADO_GETUNLOCK(aWdata[ WA_TABLENAME],xRecID,nWA)  //RELEASES ONLY THIS RECORD
 
-   ENDIF
+      ELSE
+         ADO_GETUNLOCK(aWdata[ WA_TABLENAME],"ZWTXFL",nWA)
 
-   IF !EMPTY(xRecID)
-      ADO_GETUNLOCK(aWdata[ WA_TABLENAME],xRecID,nWA)  //RELEASES ONLY THIS RECORD
-
-   ELSE
-      ADO_GETUNLOCK(aWdata[ WA_TABLENAME],"ZWTXFL",nWA)
+      ENDIF
 
    ENDIF
 
@@ -2831,7 +2818,6 @@ STATIC FUNCTION ADO_UNLOCK( nWA, xRecID )
       aWdata[ WA_FILELOCK ] := .F.
 
    ENDIF
-
 
    //it was changed eiher indexkey scope or filter need to rquery
    IF aWData[ WA_LREQUERY ]
@@ -4077,7 +4063,7 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
 
    ENDIF
 
-   cTmpTable := CFILENOPATH(cTable)
+   cTmpTable := CFILENOEXT( CFILENOPATH( cTable ) )
 
    TRY
        //TEMPORARY TABLES ARE DESTROYE AUTO WHEN NO NEEDED ANYMORE
@@ -4123,14 +4109,16 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
    END
 
    IF lNoError .AND. ( PROCNAME(1) == "__DBCOPY" .OR. PROCNAME(2) == "__DBCREATE")// WE NEED TO LEAVE OPENED TO ADO_TRANS COMPLETE THE JOB
-      SELE 0
-      IF EMPTY(aOpenInfo[ UR_OI_ALIAS ])
-        USE (cTable) ALIAS  cTable  EXCLUSIVE
-
-      ELSE
-         USE (cTable) EXCLUSIVE ALIAS (aOpenInfo[ UR_OI_ALIAS ])
+      IF EMPTY( aOpenInfo[ UR_OI_AREA ] )
+         SELE 0
 
       ENDIF
+      IF EMPTY( aOpenInfo[ UR_OI_ALIAS ] )
+         aOpenInfo[ UR_OI_ALIAS ] := aOpenInfo[ UR_OI_NAME ]+"CP"
+
+      ENDIF
+
+      USE (aOpenInfo[ UR_OI_NAME ]) EXCLUSIVE ALIAS (aOpenInfo[ UR_OI_ALIAS ])
 
       IF NETERR()
          //ERROR TO BE RAISED!
@@ -4391,7 +4379,7 @@ STATIC FUNCTION ADOTEMPTABLE(DbEngine)
   RETURN cMark
 
 
-STATIC FUNCTION ADOFILE( oCn, cTable, cIndex)
+STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
    LOCAL lRet := .F.
    LOCAL oRs := TOleAuto():New( "ADODB.Recordset" )
@@ -4426,8 +4414,14 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex)
               oRs   := oCn:OpenSchema( adSchemaTables )
 
               IF ! oRs:Eof()
-                 oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
+                 IF UPPER( SUBSTR( cTmpTable ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( cTmpTable ,1,4 ) ) = "TEMP" //24.06.15
+                    oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'LOCAL TEMPORARY'"
+                 ELSE
+                    oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
+                 ENDIF
+
                  lRet   := !( oRs:Bof .and. oRs:Eof )
+
               ENDIF
 
               oRs:Close()
@@ -4462,25 +4456,32 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex)
 
    ENDIF
 
+   //19.06.15 views
+   IF ! EMPTY( cView )
+      TRY
+         oRs:Open(" SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS ",oCn)
+
+         IF ! oRs:Eof()
+            oRs:Filter  := "TABLE_NAME = '" + cView+"'"
+            lRet   := !( oRs:Bof .and. oRs:Eof )
+         ENDIF
+
+         oRs:Close()
+
+      CATCH
+         // OpenSchema(adSchemaViews) is not supported by provider
+         // we do not know if the table exists
+         ADOSHOWERROR( oCn )  // Comment out in final release
+
+      END
+
+   ENDIF
+
+
    RETURN lRet
 
 
-STATIC FUNCTION ADOCOPYFILE(   cSource, cDestine, lOverWrite  )
-  // in progress
-  RETURN lRet
-
-
-STATIC FUNCTION ADOERASE(  cSource )
-  // in progress
-  RETURN lRet
-
-
-STATIC FUNCTION ADORENAME(  cSource, cDestine )
-  // in progress
-  RETURN lRet
-
-
-STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,DBEngine)
+STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,cView, DBEngine)
 
 
    LOCAL lRet := .F.,cSql
@@ -4537,6 +4538,18 @@ STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,DBEngine)
 
       CATCH
           ADOSHOWERROR( oCon, .f. )
+
+      END
+
+   ENDIF
+
+   IF ! EMPTY( cView )
+      TRY
+         oCon:Execute( "DROP VIEW " + cView )
+         lRet := .T.
+
+      CATCH
+         ADOSHOWERROR( oCon, .f. )
 
       END
 
@@ -4893,7 +4906,6 @@ return '#' + cRet + '#'
 
 STATIC FUNCTION ADOCON_CHECK()
  LOCAL lCnOpened := .F.
-return .t. //trials
 
    IF oConnection != NIL
       IF oConnection:State == 0
@@ -5081,11 +5093,11 @@ FUNCTION hb_adoRddGetTableName( nWA )
    RETURN iif( aWAData != NIL, aWAData[ WA_TABLENAME ], NIL )
 
 
-FUNCTION hb_adoRddExistsTable( oCn, cTable, cIndex )
-   RETURN ADOFILE( oCn, cTable, cIndex )
+FUNCTION hb_adoRddExistsTable( oCn, cTable, cIndex, cView )
+   RETURN ADOFILE( oCn, cTable, cIndex, cView )
 
-FUNCTION hb_adoRddDrop( oCn, cTable, cIndex, DBEngine )
-   RETURN ADODROP( oCn, cTable, cIndex, DBEngine )
+FUNCTION hb_adoRddDrop( oCn, cTable, cIndex, cView, DBEngine )
+   RETURN ADODROP( oCn, cTable, cIndex, cView,  DBEngine )
 
 
 FUNCTION ListIndex(aList) //ATTENTION ALL MUST BE UPPERCASE
@@ -5177,53 +5189,8 @@ STATIC FUNCTION ADOGETCONNECT( cDB, cServer, cEngine, cUser, cPass  )
  LOCAL oCn := TOleAuto():New( "ADODB.Connection" )
 
   TRY
-     oCn:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
 
-     DO CASE
-        CASE cEngine = "ACCESS"
-             IF Empty( t_cPassword )
-                oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  )
-             ELSE
-                oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  + ";Jet OLEDB:Database Password=" + AllTrim( cUser ) )
-             ENDIF
-
-        CASE cEngine = "ADS"
-             oCn:Open("Provider=Advantage OLE DB Provider;User ID="+cUser +;
-                      ";Data Source="+ cDB +";TableType=ADS_VFP;"+;
-                      "Advantage Server Type=ADS_LOCAL_SERVER;")
-
-        CASE cEngine == "MYSQL"
-             oCn:Open( "Driver={mySQL ODBC 5.3 ANSI Driver};" + ;
-                        "server=" + cServer + ;
-                        ";Port=3306;Option=32"+;
-                        ";database=" + cDB  + ;
-                        ";uid=" + cUser + ;
-                        ";pwd=" + cPass+";" )
-
-        CASE  cEngine == "SQL"
-              oCn:Open( "Provider=SQLOLEDB;" + ;
-                        "server=" + cServer + ;
-                        ";database=" + cDB  + ;
-                        ";uid=" + cUser + ;
-                        ";pwd=" + cPass )
-
-        CASE cEngine == "ORACLE"
-             oCn:Open( "Provider=MSDAORA.1;" + ;
-                       "Persist Security Info=False" + ;
-                       iif( Empty( cServer ), ;
-                       "", ";Data source=" + cServer ) + ;
-                       ";User ID=" + cUser + ;
-                       ";Password=" + cPass )
-
-        CASE cEngine == "FIREBIRD"
-             oCn:Open( "Driver=Firebird/InterBase(r) driver;" + ;
-                       "Persist Security Info=False" + ;
-                       ";Uid=" + cUser + ;
-                       ";Pwd=" + cPass + ;
-                       ";DbName=" + cDB  )
-
-     ENDCASE
-
+     oCn := ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
 
   CATCH
      ADOSHOWERROR( oCn )
@@ -5233,7 +5200,6 @@ STATIC FUNCTION ADOGETCONNECT( cDB, cServer, cEngine, cUser, cPass  )
   END
 
   RETURN oCn
-
 
 
 /* default field to be used as recno */
@@ -5299,6 +5265,7 @@ STATIC FUNCTION TempRecordSet() //USED IN ADO_SEEK AVOID OVERTIME NEW OBJ RECORD
 FUNCTION hb_GetAdoConnection()//supply app the con object
   RETURN oConnection
 
+
 //ceate table for record lock control
 FUNCTION ADOLOCKCONTROL(cPath,cRdd)
  STATIC cFile,rRdd
@@ -5349,7 +5316,7 @@ FUNCTION ADOFORCELOCKS(lOn) //force lock control buy ado
 
 FUNCTION ADOVERSION()
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.160615/1"
+RETURN "AdoRdd Version 1.240615/1"
 
 /*                   END ADO SET GET FUNCTONS */
 
