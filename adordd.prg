@@ -444,16 +444,24 @@ STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
   oCn:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
 
   DO CASE
+     CASE cEngine = "DBASE"
+         oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB +;
+                   ";Extended Properties=dBASE IV;User ID="+cUser+";Password="+cPass+";" )
+
+     CASE cEngine = "FOXPRO"
+         oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB +;
+                   ";Extended Properties=Foxpro;User ID="+cUser+";Password="+cPass+";" )
+
      CASE cEngine = "ACCESS"
-          IF Empty( t_cPassword )
+          IF Empty( cPass )
              oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  )
            ELSE
-              oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  + ";Jet OLEDB:Database Password=" + AllTrim( cUser ) )
+              oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  + ";Jet OLEDB:Database Password=" + AllTrim( cPass ) )
            ENDIF
 
      CASE cEngine = "ADS"
           oCn:Open("Provider=Advantage OLE DB Provider;User ID="+cUser +;
-                    ";Data Source="+ cDB +";TableType=ADS_VFP;"+;
+                    ";Password="+cPass+";Data Source="+ cDB +";TableType=ADS_VFP;"+;
                     "Advantage Server Type=ADS_LOCAL_SERVER;")
 
      CASE cEngine == "MYSQL"
@@ -480,12 +488,38 @@ STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
                         ";User ID=" + cUser + ;
                         ";Password=" + cPass )
 
+/*  NOT IMPLEMENTED ARRAY DBENGINES STRUCTS ETC
      CASE cEngine == "FIREBIRD"
           oCn:Open( "Driver=Firebird/InterBase(r) driver;" + ;
                     "Persist Security Info=False" + ;
                     ";Uid=" + cUser + ;
                     ";Pwd=" + cPass + ;
                     ";DbName=" + cDB  )
+*/
+      CASE cEngine == "SQLITE"
+           oCn:Open( "Driver={SQLite3 ODBC Driver};" + ;
+                     "Database=" + cDB   + ;
+                     ";LongNames=0;Timeout=1000;NoTXN=0;SyncPragma=NORMAL;StepAPI=0;"   )
+
+      CASE cEngine == "POSTGRE"
+           oCn:Open( "Driver={PostgreSQL};Server="+cServer+";Port=5432;"+;
+                     "Database="+ cDB+;
+                     ";Uid="+cUser+";Pwd="+cPass+";" )
+
+      CASE cEngine == "INFORMIX"
+           oCn:Open( "Dsn='';Driver={INFORMIX 3.30 32 BIT};"+;
+                     "Host="+""+";Server="+cServer+";"+;
+                     "Service="+""+";Protocol=olsoctcp;"+;
+                     "Database="+cDB+";Uid="+cUser+";"+;
+                     "Pwd="+cPass+";" )
+
+      CASE cEngine == "ANYWHERE"
+           oCn:Open( "Driver={SQL Anywhere 12};"+;
+           "Host="+cServer+";Server="+cServer+";port=2638;"+;
+           "db="+cDB+;
+           iif(empty(cUser),";Trusted_Connection=yes",;
+                         ";uid=" + cUser + ;
+                         ";pwd=" + cPass ) )
 
   ENDCASE
 
@@ -1080,7 +1114,7 @@ STATIC FUNCTION ADO_TRANS(  nWA, aTransInfo )
  LOCAL aWAData    := USRRDD_AREADATA( nWA )
  LOCAL oRs := aWAData[ WA_RECORDSET ]
  //LOCAL oRsDst := IF( (DstArea)->(RDDNAME()) = "ADORDD",USRRDD_AREADATA( DstArea  )[ WA_RECORDSET ],NIL)
- LOCAL nRecno, oError
+ LOCAL nRecno, oError, n
 
  DEFAULT  aScopeInfo[UR_SI_BWHILE] TO { ||.T. }
  DEFAULT  aScopeInfo[UR_SI_BFOR]   TO { ||.T. }
@@ -4414,7 +4448,7 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
               oRs   := oCn:OpenSchema( adSchemaTables )
 
               IF ! oRs:Eof()
-                 IF UPPER( SUBSTR( cTmpTable ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( cTmpTable ,1,4 ) ) = "TEMP" //24.06.15
+                 IF UPPER( SUBSTR( cTable ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( cTable ,1,4 ) ) = "TEMP" //24.06.15
                     oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'LOCAL TEMPORARY'"
                  ELSE
                     oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
