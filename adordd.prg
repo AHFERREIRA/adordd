@@ -5350,7 +5350,7 @@ FUNCTION ADOFORCELOCKS(lOn) //force lock control buy ado
 
 FUNCTION ADOVERSION()
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.240615/1"
+RETURN "AdoRdd Version 1.250615/1"
 
 /*                   END ADO SET GET FUNCTONS */
 
