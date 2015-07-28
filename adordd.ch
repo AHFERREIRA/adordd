@@ -256,7 +256,7 @@
 /* sets for adordd */
 #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
-#command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
+#command SET ADO TEMPORARY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
 #command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> [USER TO <cUser>];
@@ -264,5 +264,8 @@
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
 #command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
 
+#command SET ADO VIRTUAL DELETE <x:ON,OFF>  => ADOVIRTUALDELETE( Upper( <(x)> ) == "ON" ) /* DELETE LIKE DBF ?*/
+#command SET ADO DEFAULT DELETED FIELD TO <cname>  => ADODEFLDDELETED( <cname> ) /* defining the default name for DELETED field*/
+#command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
 
 #endif
