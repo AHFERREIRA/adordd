@@ -1,11 +1,17 @@
 
 //2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
 
+#include "adordd.ch" 
+
+
  FUNCTION Main()
  LOCAL cSql :=""
+ SET EXCLUSIVE OFF
 
+ REQUEST ADORDD, ADOVERSION, RECSIZE
   RddRegister("ADORDD",1)
   RddSetDefault("ADORDD")
+  
 
 
     /*                                             NOTES
@@ -90,81 +96,127 @@
 
 
    PLEASE REPORT ANY BUGS! THANKS!   */
+   
+   A=" "
+   @ 0,0 say "Espere" get A
+   read
 
     SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
-    SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+    SET ADO TEMPORARY NAMES INDEX LIST TO {"TMP","TEMP"}
     SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
     SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
     SET AUTOPEN ON //might be OFF if you wish
     SET AUTORDER TO 1 // first index opened can be other
-
-    //need to include complete path
-    SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TEST2.mdb" SERVER TO "CSEVER" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
-
+    
+    SET ADO FORCE LOCK ON // Changed default to OFF
+   
     //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
-    SET ADO LOCK CONTROL SHAREPATH TO  "D:\WHATEVER" RDD TO "DBFCDX"
-
-   IF !FILE(   "\test2.mdb"   )
+    SET ADO LOCK CONTROL SHAREPATH TO  "C:" RDD TO "DBFCDX"
+    
+    SET ADO VIRTUAL DELETE ON  /* DELETE LIKE DBF ?*/
+    SET ADO DEFAULT DELETED FIELD TO "HBDELETED" /* defining the default name for DELETED field*/
+    SET ADO FIELDDELETED TABLES LIST TO {{"TABLE1","HBDELETED"},{"TABLE2","HBDELETED"}}
+    
+    SET DELETED OFF
+	
+   IF (NewDB := !FILE(   "\test2.mdb"   ))
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate("table1;\test2.mdb", ;
-                                { { "CODID",   "C", 10, 0 },;
+      DbCreate("table1;\test2.mdb;ACCESS;Marco_Note", ;
+                                {{ "CODID",   "C", 10, 0 },;
                                   { "FIRST",   "C", 30, 0 },;
                                   { "LAST",    "C", 30, 0 },;
                                   { "AGE",     "N",  8, 0 },;
                                   { "HBRECNO", "+", 10, 0  } }, "ADORDD" )
+                                  
+                               
+   endif
+
+   //need to include complete path
+   SET ADO DEFAULT DATABASE TO "C:\test2.mdb" SERVER TO "MARCO_NOTE" ENGINE TO "ACCESS" USER TO "" PASSWORD TO ""
+	
+	if hb_adoRddExistsTable( "table1") .and. NewDB
+          
+                                  
+	   SELE 0
+	   USE table1 ALIAS "TEST1"
+	   
+	   APPEND BLANK
+	   test1->First   := "HOMER si no Homer"
+	   test1->Last    := "Simpson"
+	   test1->Age     := 45
+	   test1->codid   := "0001"
+	   
+	   APPEND BLANK
+	   test1->First   := "Lara"
+	   test1->Last    := "Croft si no"
+	   test1->Age     := 32
+	   test1->codid   := "0002"
+	   test1->(dbcommit())  
+	endif
+	
+	if !hb_adoRddExistsTable( "table2")                               
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "table2;\test2.mdb", ;
-                                { { "CODID",    "C", 10, 0 },;
-                                  { "ADDRESS",  "C", 30, 0 },;
-                                  { "PHONE",    "C", 30, 0 },;
-                                  { "EMAIL",    "C", 100,0 },;
-                                  { "HBRECNO",  "+", 10,0  } }, "ADORDD" )
+      DbCreate( "table2;\test2.mdb;ACCESS;Marco_Note", ;
+                             { { "CODID",    "C", 10, 0 },;
+                               { "ADDRESS",  "C", 30, 0 },;
+                               { "PHONE",    "C", 30, 0 },;
+                               { "EMAIL",    "C", 100,0 },;
+                               { "HBRECNO",  "+", 10,0  } }, "ADORDD" )
+                               
+                               
+	   SELE 0
+	   USE table2 ALIAS "TEST2"
+	
+	   APPEND BLANK
+	   test2->address := "742 Evergreen Terrace"
+	   test2->phone   := "01 2920002"
+	   test2->email   := "homer@homersimpson.com"
+	   test2->codid   := "0001"
+	
+	   APPEND BLANK
+	   test2->address := "Raymond Street"
+	   test2->phone   := "0039 29933003"
+	   test2->email   := "lara@laracroft.com"
+	   test2->codid   := "0002"
+	   test2->(dbcommit())
+   endif                            
+                               
 
-     SELE 0
-     USE table1 ALIAS "TEST1"
+	if !hb_adoRddExistsTable( "table3")                               
+      //need to include complete path defaults to SET ADO DEFAULT DATABA
+      DbCreate( "table3;\test2.mdb", ;
+                             { { "CODID",    "C", 10, 0 },;
+                               { "ADDRESS",  "C", 30, 0 },;
+                               { "PHONE",    "C", 30, 0 },;
+                               { "EMAIL",    "C", 100,0 },;
+                               { "HBRECNO",  "+", 10,0  } }, "ADORDD" )
+   endif                            
 
-     APPEND BLANK
-     test1->First   := "HOMER si no Homer"
-     test1->Last    := "Simpson"
-     test1->Age     := 45
-     test1->codid   := "0001"
 
-     APPEND BLANK
-     test1->First   := "Lara"
-     test1->Last    := "Croft si no"
-     test1->Age     := 32
-     test1->codid   := "0002"
-     test1->(dbcommit())
+   
 
-     SELE 0
-     USE table2 ALIAS "TEST2"
 
-     APPEND BLANK
-     test2->address := "742 Evergreen Terrace"
-     test2->phone   := "01 2920002"
-     test2->email   := "homer@homersimpson.com"
-     test2->codid   := "0001"
+   CLOSE ALL
+   
 
-     APPEND BLANK
-     test2->address := "Raymond Street"
-     test2->phone   := "0039 29933003"
-     test2->email   := "lara@laracroft.com"
-     test2->codid   := "0002"
-     test2->(dbcommit())
-
-     CLOSE ALL
-   ENDIF
 
    SELE 0
    USE table1 ALIAS "TEST1"
+	
+	   APPEND BLANK
+	   test1->First   := "A HOMER si no Homer "
+	   test1->Last    := "A Simpson delete"
+	   test1->Age     := 45
+	   test1->codid   := "0001" 
+	   
    SELE 0
-   USE table2 ALIAS "TEST2"
+   USE table2 ALIAS "TEST2" 
 
    //LOCKING TRIAL
    GOTO 1
 
-   IF DBRLOCK(1)
+   IF DBRLOCK()
       MSGINFO("TABLE 2 RECORD 1 LOCKED! START ANOTHER "+;
               "INSTANCE OF APP BEFORE CLOSING THIS MESSAGE"+;
               " CHECK LOCK!")
@@ -175,14 +227,53 @@
 
    ENDIF
 
+	skip 1
+
+   IF DBRLOCK()
+      MSGINFO("TABLE 2 RECORD 2 LOCKED! START ANOTHER "+;
+              "INSTANCE OF APP BEFORE CLOSING THIS MESSAGE"+;
+              " CHECK LOCK!")
+      UNLOCK
+
+   ELSE
+      MSGINFO("TABLE 2 COULD NOT LOCK RECORD 2")
+
+   ENDIF
+
    GO TOP
 
    SELE TEST1
    GO TOP
+   
    MSGINFO("BROWSE DEFAULT ORDER TABLE1")
    Browse()
+   
+   GO BOTTOM
+      MSGINFO("BLOCKING AND DELETING LAST RECORD")
+   
+   IF DBRLOCK()
+      DELETE
+      UNLOCK
 
-   SELE TEST 2
+   ELSE
+      MSGINFO("TABLE 1 COULD NOT LOCK RECORD 1")
+
+   ENDIF
+
+      GO TOP
+   
+   MSGINFO("BROWSE DEFAULT ORDER TABLE1 AFTER DELETE")
+   Browse()
+
+      GO TOP
+   
+   set DELETED ON
+   MSGINFO("BROWSE DEFAULT ORDER TABLE1 AFTER DELETE (DELETED ON)")
+   Browse()
+   set DELETED OFF
+
+
+   SELE TEST2
    GO TOP
    MSGINFO("BROWSE DEFAULT ORDER TABLE2")
    Browse()
@@ -211,9 +302,9 @@
    MSGINFO("RUNING SQL "+cSql)
 
    TRY
-      hb_GetAdoConnection()():EXECUTE(cSql)
+      hb_GetAdoConnection():EXECUTE(cSql)
    CATCH
-      ADOSHOWERROR( hb_GetAdoConnection()())
+      ADOSHOWERROR( hb_GetAdoConnection())
    END
 
    SELE 0
@@ -241,8 +332,18 @@
    MSGINFO("BROWSE RECORDSET ALIAS TEST1")
    TEST1->(BROWSE())
 
-   MSGINFO("DOES TABLE1 EXISTS ON DB ?"+CVALTOCHAR(hb_adoRddExistsTable( "Table1") ))
-   MSGINFO("DOES TABLE3 EXISTS ON DB ?"+CVALTOCHAR(hb_adoRddExistsTable( "Table3") ))
+   MSGINFO("DOES TABLE1 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table1") ))
+   MSGINFO("DOES TABLE3 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table3") ))
+   MSGINFO("DOES TABLE4 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table4") ))
+   
+   cSql := "DROP VIEW CONTACTS"
+   MSGINFO("RUNING SQL "+cSql)
+
+   TRY
+      hb_GetAdoConnection():EXECUTE(cSql)
+   CATCH
+      ADOSHOWERROR( hb_GetAdoConnection())
+   END
    DbCloseAll()
 
 RETURN nil
