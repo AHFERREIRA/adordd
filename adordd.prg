@@ -793,7 +793,7 @@ STATIC FUNCTION ADO_RECCOUNT( nWA, nRecords )
 STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    LOCAL aAWData := USRRDD_AREADATA( nWA )
    LOCAL oCon := aAWData[WA_CONNECTION]
-   LOCAL nCount := 0, cSql:="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
+   LOCAL nCount := 0, cSql:="",cWhere :="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
 
    IF !ADOCON_CHECK()
       RETURN 0
@@ -820,9 +820,17 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 
    ENDIF
 	
+   IF aWAData[ WA_DELETESCHEME ]
+      if aWAData[WA_FIELDDELETED] == NIL
+         aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+      endif
+      if aWAData[WA_FIELDDELETED] <> NIL
+	      cWhere := " Where " + aWAData[WA_FIELDDELETED] + " <> 1 "
+	   endif
+	endif	   
 	
    //LETS COUNT IT
-   oRs:open( cSql, oCon )
+   oRs:open( cSql+cWhere, oCon )
    nCount := oRs:Fields( 0 ):Value
 	
    oRs:close()
@@ -857,10 +865,17 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
             ENDIF
             // IF EOF RAISE ERROR
          ENDIF
-         ADO_DELETED(nWA,@lDeleted)
-         IF SET( _SET_DELETED ) .AND. lDeleted
-            Result := ADO_SKIPFILTER( nWA, 1 )
-         ENDIF
+         IF aWAData[ WA_DELETESCHEME ]
+            if aWAData[WA_FIELDDELETED] == NIL
+               aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+            endif
+            if aWAData[WA_FIELDDELETED] <> NIL
+               ADO_DELETED(nWA,@lDeleted)
+               IF SET( _SET_DELETED ) .AND. lDeleted
+                  Result := ADO_SKIPFILTER( nWA, 1 )
+               ENDIF
+            Endif
+			Endif	   
       ELSE
          IF oRecordSet:Supports(adBookmark)
             //WORKAROUND IT GETS HERE AS INTEGER WITHOUT DECIMALS
@@ -921,10 +936,17 @@ STATIC FUNCTION ADO_GOTOID( nWA, nRecord )
             ENDIF
             // IF EOF RAISE ERROR
          ENDIF
-         ADO_DELETED(nWA,@lDeleted)
-         IF SET( _SET_DELETED ) .AND. lDeleted
-            Result := ADO_SKIPFILTER( nWA, 1 )
-         ENDIF
+         IF aWAData[ WA_DELETESCHEME ]
+            if aWAData[WA_FIELDDELETED] == NIL
+               aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+            endif
+            if aWAData[WA_FIELDDELETED] <> NIL
+               ADO_DELETED(nWA,@lDeleted)
+               IF SET( _SET_DELETED ) .AND. lDeleted
+                  Result := ADO_SKIPFILTER( nWA, 1 )
+               ENDIF
+            endif
+			endif			   
 
       ELSE
          IF oRecordSet:Supports(adBookmark)
@@ -935,10 +957,17 @@ STATIC FUNCTION ADO_GOTOID( nWA, nRecord )
          ELSE
             oRecordSet:AbsolutePosition := Max( 1, Min( nRecord, oRecordSet:RecordCount() ) )
          ENDIF
-         ADO_DELETED(nWA,@lDeleted)
-         IF SET( _SET_DELETED ) .AND. lDeleted
-            Result := ADO_SKIPFILTER( nWA, 1 )
-         ENDIF
+         IF aWAData[ WA_DELETESCHEME ]
+            if aWAData[WA_FIELDDELETED] == NIL
+               aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+            endif
+            if aWAData[WA_FIELDDELETED] <> NIL
+               ADO_DELETED(nWA,@lDeleted)
+               IF SET( _SET_DELETED ) .AND. lDeleted
+                  Result := ADO_SKIPFILTER( nWA, 1 )
+               ENDIF
+            Endif
+			Endif	   
 
       ENDIF
 
@@ -965,10 +994,17 @@ STATIC FUNCTION ADO_GOTOP( nWA )
 
    IF !ADOEMPTYSET( oRecordSet )
       oRecordSet:MoveFirst()
-      ADO_DELETED(nWA,@lDeleted)
-      IF SET( _SET_DELETED ) .AND. lDeleted
-         Result := ADO_SKIPFILTER( nWA, 1 )
-      ENDIF
+      IF aWAData[ WA_DELETESCHEME ]
+         if aWAData[WA_FIELDDELETED] == NIL
+            aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+         endif
+         if aWAData[WA_FIELDDELETED] <> NIL
+            ADO_DELETED(nWA,@lDeleted)
+            IF SET( _SET_DELETED ) .AND. lDeleted
+               Result := ADO_SKIPFILTER( nWA, 1 )
+            ENDIF
+         Endif
+		Endif	   
       IF !EMPTY(aWAData[WA_PENDINGREL]) .AND. PROCNAME(2) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
          ADO_FORCEREL( nWA )
       ENDIF
@@ -988,10 +1024,17 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
    IF !ADOEMPTYSET( oRecordSet )
       oRecordSet:MoveLast()
-      ADO_DELETED(nWA,@lDeleted)
-      IF SET( _SET_DELETED ) .AND. lDeleted
-         Result := ADO_SKIPFILTER( nWA, -1 )
-      ENDIF
+      IF aWAData[ WA_DELETESCHEME ]
+         if aWAData[WA_FIELDDELETED] == NIL
+            aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+         endif
+         if aWAData[WA_FIELDDELETED] <> NIL
+            ADO_DELETED(nWA,@lDeleted)
+            IF SET( _SET_DELETED ) .AND. lDeleted
+               Result := ADO_SKIPFILTER( nWA, -1 )
+            ENDIF
+         Endif
+		Endif	   
       IF !EMPTY( aWAData[WA_PENDINGREL] ) .AND. PROCNAME( 2 ) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
          ADO_FORCEREL( nWA )
       ENDIF
@@ -1005,7 +1048,7 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
 STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
 
-   LOCAL aWAData   := USRRDD_AREADATA( nWA ), lBof
+   LOCAL aWAData   := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ],lDeleted,nRecNo
    //LOCAL aDBFData  := aWAData[ WADATA_DATABASE ]
    //LOCAL aRecInfo  := aDBFData[ DATABASE_RECINFO ]
@@ -1013,34 +1056,36 @@ STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
    
    nToSkip := iif( nRecords > 0, 1, iif( nRecords < 0, - 1, 0 ) )
 
-   IF nToSkip != 0
-      DO WHILE !aWAData[ WA_BOF ] .AND. !aWAData[ WA_EOF ]
-         ADO_DELETED(nWA,@lDeleted)
-         IF ( Set( _SET_DELETED ) .AND. lDeleted ) && .OR. ;
-               //( aWAData[ WADATA_FILTERINFO ] <> nil .AND. !Eval( aWAData[ WADATA_FILTERINFO, 1 ] ) )
-            IF !( ADO_SKIPRAW( nWA, nToSkip ) == HB_SUCCESS )
-               RETURN HB_FAILURE
-            ENDIF
-            IF nToSkip < 0 .AND. aWAData[ WA_BOF ]
-               //lBof := TRUE
-               //nToSkip := 1
-               //aWAData[ WA_BOF ] := .F.
+   IF aWAData[ WA_DELETESCHEME ]
+      if aWAData[WA_FIELDDELETED] == NIL
+         aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+      endif
+      if aWAData[WA_FIELDDELETED] <> NIL
+   
+         IF nToSkip != 0
+            DO WHILE !aWAData[ WA_BOF ] .AND. !aWAData[ WA_EOF ]
+               ADO_DELETED(nWA,@lDeleted)
+               IF ( Set( _SET_DELETED ) .AND. lDeleted ) && .OR. ;
+                     //( aWAData[ WADATA_FILTERINFO ] <> nil .AND. !Eval( aWAData[ WADATA_FILTERINFO, 1 ] ) )
+                  IF !( ADO_SKIPRAW( nWA, nToSkip ) == HB_SUCCESS )
+                     RETURN HB_FAILURE
+                  ENDIF
+                  IF nToSkip < 0 .AND. aWAData[ WA_BOF ]
+                     EXIT
+                  ELSEIF nToSkip > 0 .AND. aWAData[ WA_EOF ]
+				      	EXIT
+                  ENDIF
+                  LOOP
+               ENDIF
+
+               // FILTERS
+
                EXIT
-            ELSEIF nToSkip > 0 .AND. aWAData[ WA_EOF ]
-					EXIT
-            ENDIF
-            LOOP
+            ENDDO
+
          ENDIF
-
-         // FILTERS
-
-         EXIT
-      ENDDO
-      IF lBof != NIL
-         aWAData[ WA_BOF ] := .T.
-      ENDIF
-
-   ENDIF
+      endif
+	endif	   
 
    RETURN HB_SUCCESS
    
