@@ -774,18 +774,20 @@ STATIC FUNCTION ADO_RECID( nWA, nRecNo )
 STATIC FUNCTION ADO_RECCOUNT( nWA, nRecords )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ],nRecNo
 
-   IF oRecordSet:RecordCount() < 0 .OR. oRecordSet:Eof()  //14.6.15 ONLY IF IT NOT EOF OTHERWISE GHOST RECORD
-      nRecords := ADORECCOUNT( nWA,oRecordSet ) // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
+	nRecords := ADORECCOUNTNODEL(nWA,oRecordset)
+	
+	
+   //IF oRecordSet:RecordCount() < 0 .OR. oRecordSet:Eof()  //14.6.15 ONLY IF IT NOT EOF OTHERWISE GHOST RECORD
+   //   nRecords := ADORECCOUNT( nWA,oRecordSet ) // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
+   //ELSE
+   //   ADO_RECID( nWA,@nRecNo )
+   //   IF nRecNo > oRecordSet:RecordCount()
+   //      nRecords := nRecNo
+   //   ELSE
+   //      nRecords :=  oRecordSet:RecordCount()
+   //   ENDIF
 
-   ELSE
-      ADO_RECID( nWA,@nRecNo )
-      IF nRecNo > oRecordSet:RecordCount()
-         nRecords := nRecNo
-      ELSE
-         nRecords :=  oRecordSet:RecordCount()
-      ENDIF
-
-   ENDIF
+   //ENDIF
 
    RETURN HB_SUCCESS
 
@@ -793,16 +795,16 @@ STATIC FUNCTION ADO_RECCOUNT( nWA, nRecords )
 STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    LOCAL aAWData := USRRDD_AREADATA( nWA )
    LOCAL oCon := aAWData[WA_CONNECTION]
-   LOCAL nCount := 0, cSql:="",cWhere :="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
+   LOCAL nCount := 0,cSql:="",oRs := TOleAuto():New("ADODB.Recordset")  //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
 	Local cDeletedField := ADO_GET_FIELD_DELETED( aAWData[WA_TABLENAME] )
 	
    IF !ADOCON_CHECK()
-      RETURN 0
+      RETURN 0 
 
    ENDIF
 
    IF ADOEMPTYSET( oRecordSet )
-      RETURN nCount
+      RETURN nCount 
 
    ENDIF
 
@@ -811,7 +813,8 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    oRS:CursorLocation := IF(aAWData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseClient) //adUseServer  // adUseClient its slower but has avntages such always bookmaks
    oRs:CursorType     := adOpenForwardOnly
    oRs:LockType       := adLockReadOnly
-
+   
+   
    IF !VALTYPE(  aAWData[WA_FIELDRECNO]  ) == "U"  //RECCOUNT/LASTREC = MAX NUMBER OF FIELD RECNO
       cSql := "SELECT MAX("+(ADO_GET_FIELD_RECNO( aAWData[WA_TABLENAME] ))+") FROM "+aAWData[WA_TABLENAME]
 
@@ -821,22 +824,67 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 
    ENDIF
 	
-   IF aWAData[ WA_DELETESCHEME ]
-      if aWAData[WA_FIELDDELETED] == NIL
-         aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
+   //LETS COUNT IT
+   oRs:open( cSql, oCon )
+   nCount := oRs:Fields( 0 ):Value
+	
+   oRs:close()
+
+   RETURN nCount 
+
+STATIC FUNCTION ADORECCOUNTNODEL(nWA,oRecordSet) //AHF
+   LOCAL aAWData := USRRDD_AREADATA( nWA )
+   LOCAL oCon := aAWData[WA_CONNECTION]
+   LOCAL nCount := 0,cSql:="",cWhere:="",oRs := TOleAuto():New("ADODB.Recordset")  //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
+	Local cDeletedField := ADO_GET_FIELD_DELETED( aAWData[WA_TABLENAME] )
+	
+   IF !ADOCON_CHECK()
+      RETURN 0
+
+   ENDIF
+
+   IF ADOEMPTYSET( oRecordSet )
+      RETURN nCount 
+
+   ENDIF
+
+   //Making it lightning faster
+
+   oRS:CursorLocation := IF(aAWData[ WA_ENGINE ] = "ACCESS", adUseClient, adUseClient) //adUseServer  // adUseClient its slower but has avntages such always bookmaks
+   oRs:CursorType     := adOpenForwardOnly
+   oRs:LockType       := adLockReadOnly
+   
+   
+   //IF !VALTYPE(  aAWData[WA_FIELDRECNO]  ) == "U"  //RECCOUNT/LASTREC = MAX NUMBER OF FIELD RECNO
+   //   cSql := "SELECT MAX("+(ADO_GET_FIELD_RECNO( aAWData[WA_TABLENAME] ))+") FROM "+aAWData[WA_TABLENAME]
+
+   //ELSE	//NO FIELD RECNO RECCOUNT/LASTREC = NR OF ROWS
+      //LAST PARAMTER INSERTS cSql COUNT(*) MUST BE ALL FIELDS BECAUSE IF THERE IS A NULL FIELD COUNTS RETURNS WRONG
+      cSql := "SELECT COUNT(*) FROM "+aAWData[WA_TABLENAME]
+
+   //ENDIF
+	
+   IF aAWData[ WA_DELETESCHEME ]
+      if aAWData[WA_FIELDDELETED] == NIL
+         aAWData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aAWData[ WA_TABLENAME ])
       endif
-      if aWAData[WA_FIELDDELETED] <> NIL
-	      cWhere := " Where " + cDeletedField + " <> 1 "
+      if aAWData[WA_FIELDDELETED] <> NIL 
+         if SET(_SET_DELETED)
+	         cWhere := " WHERE " + UPPER(cDeletedField) + " = 0 "
+	      endif   
 	   endif
 	endif	   
+	
+	
 	
    //LETS COUNT IT
    oRs:open( cSql+cWhere, oCon )
    nCount := oRs:Fields( 0 ):Value
 	
    oRs:close()
+   
 
-   RETURN nCount
+   RETURN nCount 
 
 
 STATIC FUNCTION ADO_GOTO( nWA, nRecord )
@@ -1432,7 +1480,7 @@ STATIC FUNCTION ADO_DELETE( nWA )
 
    ENDIF
 
-   IF ADORECCOUNT( nWA,oRecordSet ) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
+   IF ADORECCOUNTNODEL( nWA,oRecordSet ) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
       IF !oRecordSet:Eof .AND. !oRecordSet:Bof
          ADO_RECID( nWa, @nRecNo )
 
@@ -1504,7 +1552,7 @@ STATIC FUNCTION ADO_RECALL( nWA )
 
       ENDIF
 
-      IF ADORECCOUNT( nWA,oRecordSet ) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
+      IF ADORECCOUNTNODEL( nWA,oRecordSet ) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
          IF !oRecordSet:Eof .AND. !oRecordSet:Bof
             ADO_RECID( nWa, @nRecNo )
 

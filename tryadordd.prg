@@ -8,6 +8,9 @@
  LOCAL cSql :=""
  SET EXCLUSIVE OFF
 
+
+
+
  REQUEST ADORDD, ADOVERSION, RECSIZE
   RddRegister("ADORDD",1)
   RddSetDefault("ADORDD")
@@ -112,7 +115,7 @@
     SET ADO FORCE LOCK ON // Changed default to OFF
    
     //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
-    SET ADO LOCK CONTROL SHAREPATH TO  "C:" RDD TO "DBFCDX"
+    SET ADO LOCK CONTROL SHAREPATH TO  "LOCKS" RDD TO "DBFCDX"
     
     SET ADO VIRTUAL DELETE ON  /* DELETE LIKE DBF ?*/
     SET ADO DEFAULT DELETED FIELD TO "HBDELETED" /* defining the default name for DELETED field*/
@@ -120,9 +123,9 @@
     
     SET DELETED OFF
 	
-   IF (NewDB := !FILE(   "\test2.mdb"   ))
+   IF (NewDB := !FILE(   "DADOS\test2.mdb"   ))
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate("table1;\test2.mdb;ACCESS;Marco_Note", ;
+      DbCreate("table1;DADOS\test2.mdb;ACCESS;Marco_Note", ;
                                 {{ "CODID",   "C", 10, 0 },;
                                   { "FIRST",   "C", 30, 0 },;
                                   { "LAST",    "C", 30, 0 },;
@@ -133,7 +136,7 @@
    endif
 
    //need to include complete path
-   SET ADO DEFAULT DATABASE TO "C:\test2.mdb" SERVER TO "MARCO_NOTE" ENGINE TO "ACCESS" USER TO "" PASSWORD TO ""
+   SET ADO DEFAULT DATABASE TO "DADOS\test2.mdb" SERVER TO "MARCO_NOTE" ENGINE TO "ACCESS" USER TO "" PASSWORD TO ""
 	
 	if hb_adoRddExistsTable( "table1") .and. NewDB
           
@@ -157,7 +160,7 @@
 	
 	if !hb_adoRddExistsTable( "table2")                               
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "table2;\test2.mdb;ACCESS;Marco_Note", ;
+      DbCreate( "table2;DADOS\test2.mdb;ACCESS;Marco_Note", ;
                              { { "CODID",    "C", 10, 0 },;
                                { "ADDRESS",  "C", 30, 0 },;
                                { "PHONE",    "C", 30, 0 },;
@@ -185,7 +188,7 @@
 
 	if !hb_adoRddExistsTable( "table3")                               
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "table3;\test2.mdb", ;
+      DbCreate( "table3;DADOS\test2.mdb", ;
                              { { "CODID",    "C", 10, 0 },;
                                { "ADDRESS",  "C", 30, 0 },;
                                { "PHONE",    "C", 30, 0 },;
@@ -264,12 +267,13 @@
    
    MSGINFO("BROWSE DEFAULT ORDER TABLE1 AFTER DELETE")
    Browse()
-
+   
       GO TOP
    
    set DELETED ON
    MSGINFO("BROWSE DEFAULT ORDER TABLE1 AFTER DELETE (DELETED ON)")
    Browse()
+   
    set DELETED OFF
 
 
@@ -331,10 +335,37 @@
 
    MSGINFO("BROWSE RECORDSET ALIAS TEST1")
    TEST1->(BROWSE())
+   
+   MSGINFO("DELETING TABLE IMPORTS IF EXISTS")
+   if hb_adoRddExistsTable( "IMPORTS")
+      cSql := "DROP TABLE IMPORTS"
+      TRY
+         hb_GetAdoConnection():EXECUTE(cSql)
+      CATCH
+         ADOSHOWERROR( hb_GetAdoConnection())
+      END
+   endif
+	
+	MSGINFO("GET TABLE IMPORTS STRUCTURE VIA DBFCDX")   
+   select 0
+   USE IMPORTS ALIAS IMP VIA "DBFCDX"
+   aStru := dbstruct()
+   use
+   MSGINFO("CREATING TABLE IMPORTS VIA ADO WITH STRUCTURE")
+    DbCreate( "IMPORTS;DADOS\test2.mdb", ;
+                              aStru , "ADORDD" )
+   MSGINFO("OPEN TABLE IMPORTS VIA ADO AND APPEND FROM DBF VIA DBFCDX ")                              
+   use IMPORTS alias ADOIMP
+   APPEND FROM IMPORTS via "DBFCDX"
+   
+   MSGINFO("BROWSE ADO IMPORTS TABLE")
+   browse()
 
    MSGINFO("DOES TABLE1 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table1") ))
    MSGINFO("DOES TABLE3 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table3") ))
    MSGINFO("DOES TABLE4 EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "Table4") ))
+   MSGINFO("DOES IMPORTS EXISTS ON DB ?"+ValToCharacter(hb_adoRddExistsTable( "IMPORTS") ))
+   
    
    cSql := "DROP VIEW CONTACTS"
    MSGINFO("RUNING SQL "+cSql)
