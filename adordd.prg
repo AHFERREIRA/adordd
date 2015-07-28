@@ -794,7 +794,8 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    LOCAL aAWData := USRRDD_AREADATA( nWA )
    LOCAL oCon := aAWData[WA_CONNECTION]
    LOCAL nCount := 0, cSql:="",cWhere :="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
-
+	Local cDeletedField := ADO_GET_FIELD_DELETED( aAWData[WA_TABLENAME] )
+	
    IF !ADOCON_CHECK()
       RETURN 0
 
@@ -825,7 +826,7 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
          aWAData[WA_FIELDDELETED] := ADO_GET_nFIELD_DELETED(oRecordSet,aWAData[ WA_TABLENAME ])
       endif
       if aWAData[WA_FIELDDELETED] <> NIL
-	      cWhere := " Where " + aWAData[WA_FIELDDELETED] + " <> 1 "
+	      cWhere := " Where " + cDeletedField + " <> 1 "
 	   endif
 	endif	   
 	
