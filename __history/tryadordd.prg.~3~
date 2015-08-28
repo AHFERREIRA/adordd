@@ -103,7 +103,10 @@
 
    PLEASE REPORT ANY BUGS! THANKS!   */
    
-   
+   A=" "
+   @ 0,0 say "Espere" get A
+   read
+
     SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADO TEMPORARY NAMES INDEX LIST TO {"TMP","TEMP"}
