@@ -233,28 +233,30 @@
 
 
 //YOU CAN ALSO USE CTABLE@CON STRING
-
-#command USE <cTable> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
+#command USE <(db)> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
              [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
-            [ FROM DATABASE <(db)> ] ;
-            [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, MSSQL, FIREBIRD, POSTGRE, ANYWHERE, DBASE, SQLITE, FOXPRO, ADS> ];
+            [ FROM DATABASE <dbtd> ] ;
+            [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, MSSQL, FIREBIRD, POSTGRE, ANYWHERE, DBASE, SQLITE, FOXPRO, ADS>];
             [ FROM SERVER <cServer> ] ;
-            [ QUERY <cQuery> ] ;
-            [ USER <cUser> PASSWORD <cPassword> ]=> ;
-         [ hb_adoSetDSource(<(db)>) ; ] ;
+            [ SELECT <cQuery> ] ;
+            [ WHERE <cWhere> ] ;
+            [ GROUP BY <cGroup> ] ;
+            [ HAVING <cHaving> ] ;
+            [ USER <cUser> PASSWORD <cPassword> ] => ;
+         [ hb_adoSetDSource( <dbtd> ) ; ] ;
          [ hb_adoSetEngine( <(dbEngine)> ) ; ] ;
          [ hb_adoSetServer( <cServer> ) ; ] ;
-         [ hb_adoSetQuery( <cQuery> ) ; ] ;
-         [ hb_adoSetUser( <cUser> ); hb_adoSetPassword( <cPassword> ) ; ] ;
-         dbUseArea( <.nw.>, <rdd>, <(cTable)>, <(a)>, ;
+         [ hb_adoSetQuery( <cQuery>, <cWhere>, <cGroup>, <cHaving> ) ; ] ;
+         [ hb_adoSetUser( <cUser> ) ; hb_adoSetPassword( <cPassword> ) ; ] ;
+         dbUseArea( <.nw.>, <rdd>, <(db)>, <(a)>, ;
                     iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> , [<cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
          [; dbSetIndex( <(indexN)> )]
 
 
 /* sets for adordd */
-#command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
+//NOT NEEDED ANYMORE #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
@@ -263,6 +265,6 @@
   [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
 #command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
-
+#command SET ADO INDEX UDFS TO <array> => ListUdfs( <array> )
 
 #endif
