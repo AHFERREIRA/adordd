@@ -262,9 +262,10 @@
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
 #command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> [USER TO <cUser>];
-  [PASSWORD TO <cPass>] => ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass> ,.F.) /* defining the defaults for ado open and create*/
+  [PASSWORD TO <cPass>] [CLASSNAME <cClass>]=> ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass>, <cClass>,.F.) /* defining the defaults for ado open and create*/
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
 #command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
 #command SET ADO INDEX UDFS TO <array> => ListUdfs( <array> )
-
+#command SET ADO DEFAULT DELETED FIELD TO <cname>  => ADODEFLDDELETED( <cname> ) /* defining the default name for DELETED field*/
+#command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
 #endif
