@@ -29,16 +29,19 @@
  * www - http://www.xharbour.org
  *
  * Copyright 2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
+ * READ CAREFULLY
  *
- * Most part has been completly rewriten with a diferent kind of approach
+ * This has been completly rewriten with a diferent kind of approach
  * not deal with Catalogs File indexes - DBA responsability
  * converting indexes to :SORT and treat indexes as "virtual" as they really dont exist as files
  *
  * Seek translate to :find and :filter
  * Indexes with UDFs allowed
- * Tables must have some ID field to be used as RECNO
- *
- *
+ * Tables must have some ID field to be used as RECNO and DELETE FIELD
+ * to be used as deleted flag
+ * It is 100% compatible with any other dbf rdd kind of working
+ * just need to compile and link it with your app.
+ * No code change requeried!
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -133,7 +136,8 @@ ANNOUNCE ADORDD
 #define WA_RECCOUNT       38//AHF
 #define WA_ABOOKMARKS     39//AHF
 #define WA_INDEXDESC      40//AHF
-#define WA_SIZE           40
+#define WA_FIELDDELETED   41 //MAROMANO
+#define WA_SIZE           41
 
 #define RDD_CONNECTION    1
 #define RDD_CATALOG       2
@@ -191,6 +195,7 @@ STATIC FUNCTION ADO_NEW( nWA )
    aWAData[WA_RECCOUNT] := NIL //27.06.15
    aWAData[WA_ABOOKMARKS] := {}
    aWAData[WA_INDEXDESC] := {}
+   aWAData[WA_FIELDDELETED] := NIL
 
    USRRDD_AREADATA( nWA, aWAData )
 
@@ -257,7 +262,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
    ENDIF
 
-   oRecordSet :=  TOleAuto():New( "ADODB.Recordset" )
+   oRecordSet := ADOCLASSNEW( "ADODB.Recordset" ) //TOleAuto():New( "ADODB.Recordset" )
 
    IF oRecordSet == NIL
       oError := ErrorNew()
@@ -313,8 +318,11 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       #endif
 
       // CHECK IF IT EXISTS RECNO FIELD
+      //FROM _DBAPP DONT KNOW WHY BUT FIELD TYPE ALWAYS = N
       IF ALLTRIM( oRecordSet:Fields( n - 1 ):Name ) == ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLENAME ] ) ;
-        .AND. ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "+"
+        .AND. ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "+" .OR. ;
+        ( ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "N" .AND. PROCNAME( 1 ) == "__DBAPP" )
+
          aWAData[WA_FIELDRECNO]:=  n - 1
          //IF IT SUPPORTS SEEK WE WILL SEEK IT ISNTEAD OF FIND IT
          IF !oRecordSet:Supports(adIndex) .OR. !oRecordSet:Supports(adSeek)
@@ -326,11 +334,30 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
       ENDIF
 
+      IF  ALLTRIM( oRecordSet:Fields( n - 1 ):Name )  = ADO_GET_FIELD_DELETED(aWAData [ WA_TABLENAME]);
+         .AND. ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "L"
+         aWAData[WA_FIELDDELETED]:=  n - 1
+
+      ENDIF
+
       UR_SUPER_ADDFIELD( nWA, aField )
 
    NEXT
 
    nResult := UR_SUPER_OPEN( nWA, aOpenInfo )
+
+   //11.08.15 WE NEED SOME FIELD AS RECNO
+   IF aWAData[WA_FIELDRECNO] = NIL
+      ADO_CLOSE( nWA )
+      THROW( ErrorNew( "ADORDD", 10000, 10000, "Open "+aWAData [ WA_TABLENAME] , "ADO needs field autoinc used as Recno " ) )
+
+   ENDIF
+
+   IF aWAData[WA_FIELDDELETED] = NIL
+      ADO_CLOSE( nWA )
+      THROW( ErrorNew( "ADORDD", 10000, 10000, "Open "+aWAData [ WA_TABLENAME] , "ADO needs field DELETED as logical used as DELETED()"+aWAData [ WA_TABLENAME] ) )
+
+   ENDIF
 
    IF nResult == HB_SUCCESS
       ADO_GOTOP( nWA )
@@ -340,12 +367,6 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    //auto open set and auto order
    IF SET(_SET_AUTOPEN)
       ADO_INDEXAUTOOPEN(aWAData[ WA_TABLENAME ])
-
-   ENDIF
-
-   //11.08.15 WE NEED SOME FIELD AS RECNO
-   IF aWAData[WA_FIELDRECNO] = NIL
-      THROW( ErrorNew( "FIELD RECNO NOT EXISTING", 0, 0, "ADO needs field autoinc used as Recno" ) )
 
    ENDIF
 
@@ -367,7 +388,7 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
       IF Empty( cConnect )//aOpenInfo[ UR_OI_CONNECT ] )
 
          IF EMPTY(oConnection)
-            aWAData[ WA_CONNECTION ] :=  TOleAuto():New( "ADODB.Connection" )
+            aWAData[ WA_CONNECTION ] :=  ADOCLASSNEW( "ADODB.Connection" ) //TOleAuto():New( "ADODB.Connection" )
             oConnection := aWAData[ WA_CONNECTION ]
             aWAData[ WA_TABLENAME ]  := UPPER(aOpenInfo[ UR_OI_NAME ])
             aWAData[ WA_QUERY ]      := t_cQuery
@@ -400,7 +421,7 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
          // here we dont save oconnection for the next one because
          // we assume that is not application defult conn but a temporary conn
          //to other db system.
-         aWAData[ WA_CONNECTION ] := TOleAuto():New("ADODB.Connection")
+         aWAData[ WA_CONNECTION ] := ADOCLASSNEW( "ADODB.Connection" )//TOleAuto():New("ADODB.Connection")
          aWAData[ WA_CONNECTION ]:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
          aWAData[ WA_CONNECTION ]:Open( cConnect )  //2.6.15 SEE TOP OF THIS FUNCTION
          aWAData[ WA_TABLENAME ]  := UPPER(aOpenInfo[ UR_OI_NAME ])
@@ -419,7 +440,9 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
       IF aWAData[ WA_ENGINE ] = "ADS" .OR.  aWAData[ WA_ENGINE ] = "MSSQL"
          //IF TEMP TABLE SEND IT AS TO PROVIDER
          IF UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,3) ) = "TMP" .OR. 	UPPER( SUBSTR( aWAData[ WA_TABLENAME ],1,4) ) = "TEMP"
-            aWAData[ WA_TABLENAME ] := "#"+aWAData[ WA_TABLENAME ]
+            //temporary tables beahaves strange in loops and updates
+            //aWAData[ WA_TABLENAME ] := "#"+aWAData[ WA_TABLENAME ]
+            aWAData[ WA_TABLENAME ] := aWAData[ WA_TABLENAME ]
          ENDIF
 
       ENDIF
@@ -597,6 +620,7 @@ STATIC FUNCTION ADO_CLOSE( nWA )
    aWAData[WA_RECCOUNT] := NIL //27.06.5
    aWAData[WA_ABOOKMARKS] := {}
    aWAData[WA_INDEXDESC] := {}
+   aWAData[WA_FIELDDELETED] := NIL
 
    RETURN UR_SUPER_CLOSE( nWA )
 
@@ -723,7 +747,7 @@ STATIC FUNCTION ADO_RECCOUNT( nWA, nRecords )
 STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    LOCAL aAWData := USRRDD_AREADATA( nWA )
    LOCAL oCon := aAWData[WA_CONNECTION]
-   LOCAL nCount := 0, cSql:="",oRs := TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
+   LOCAL nCount := 0, cSql:="",oRs := ADOCLASSNEW( "ADODB.Recordset" )//TOleAuto():New("ADODB.Recordset") //OPEN A NEW ONE OTHERWISE PROBLEMS WITH OPEN BROWSES
 
    IF !ADOCON_CHECK()
       RETURN 0
@@ -751,14 +775,20 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 
    //LETS COUNT IT
    oRs:open( cSql, oCon )
-   nCount := oRs:Fields( 0 ):Value-1
+   IF ADOEMPTYSET( oRs )
+      nCount := 0
+
+   ELSE
+      nCount := oRs:Fields( 0 ):Value-1
+
+   ENDIF
 
    oRs:close()
 
    RETURN nCount
 
 
-STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
+STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
    STATIC nSecs
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL nReccount := ADORECCOUNT( nWA, aWAData[ WA_RECORDSET ] )
@@ -770,6 +800,8 @@ STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
 
 
    ENDIF
+
+   lRequery := IF( lRequery == NIL, .F., lRequery )
 
    IF !aWAData[ WA_RECORDSET ]:Eof() .AND.!aWAData[ WA_RECORDSET ]:bof()
       nRecno := aWAData[ WA_RECORDSET ]:Fields(aWAData[WA_FIELDRECNO]):Value
@@ -785,23 +817,7 @@ STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
 
    ELSE
       // NEW RECORDS ADDED BY OTHERS?
-      IF aWAData[ WA_RECCOUNT ] < nReccount //only new records
-         IF aWAData[ WA_INDEXACTIVE ] > 0
-            xKey := &( INDEXKEY( 0 ) )
-
-         ELSE
-            FOR n := 1 TO oRecordSet:Fields:Count
-                xKey += cValToChar( rs:Fields( n-1 ):Value )
-                xExpression += rs:Fields( n-1 ):Name
-                IF n = 4
-                   EXIT
-
-                ENDIF
-
-            NEXT
-
-         ENDIF
-
+      IF aWAData[ WA_RECCOUNT ] < nReccount .OR. lRequery //only new records
          //BUT ONLY IF NEW RECORDS ARE RELATED WITH OUR INDEXKEY
          IF aWAData[ WA_INDEXACTIVE ] > 0
             aSeek := ADOPseudoSeek(nWA,xKey,aWAData)
@@ -816,7 +832,6 @@ STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
             IF oRs:RecordCount > 0
                oRs:MoveLast()
                IF oRs:Fields( aWAData[WA_FIELDRECNO] ):Value > aWAData[ WA_RECCOUNT ] //new key
-                  ADO_RECID( nWA, @nRecNo )
                   aWAData[ WA_RECORDSET ]:Requery()
                   aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
                   //re initialize
@@ -829,33 +844,17 @@ STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
             oRs := NIl
 
          ELSE  //NO INDEXES MUST BE A SMALL TABLE LETS REFESH IT ALL
-            ADO_RECID( nWA, @nRecNo )
             aWAData[ WA_RECORDSET ]:Requery()
-            aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
-            //re initialize
             aWAData[ WA_RECCOUNT ] := nReccount
 
          ENDIF
 
-         IF aWAData[ WA_LREQUERY ] := .T.
-            aWAData[ WA_LREQUERY ] := .F.
-            ADO_GOTO( nWA, nRecNo )
-            IF aWAData[ WA_RECORDSET ]:Eof() //DOESNT EXIST ANYMORE LETS REPOSITION
-               IF aWAData[ WA_INDEXACTIVE ] > 0
-                  ( nWA )->( ORDSETFOCUS( aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]] ) )
-                  ADO_SEEK( nWa, .T., xKey, .F. )
+         ADO_GOTO( nWA, nRecNo )
 
-               ELSE
-                  DBCREATEINDEX( "TEMP"+ALLTRIM( NETNAME( ) ),( xExpression ) )
-                  ORDLISTADD( "TEMP"+ALLTRIM( NETNAME( ) ) )
-                  ADO_SEEK( nWa, .T., xKey, .F. )
-                  ADO_RECID( nWA, @nRecNo )
-                  ADO_ORDLSTCLEAR( nWA )
-                  ADO_GOTO( nWA, nRecNO )
-
-               ENDIF
-
-            ENDIF
+         IF aWAData[ WA_RECORDSET ]:Eof()
+            // record does not exist anymore other app delete it!
+            THROW( ErrorNew( "ADORDD", 10002, 10002, "Record move "+aWAData [ WA_TABLENAME] ,;
+                   STR(  nRecNo )+ "was deleted by other app and ADORDD cant reposition " ) )
 
          ENDIF
 
@@ -869,6 +868,7 @@ STATIC FUNCTION ADO_REFRESH( nWA ) //22.08.15
 
 
 STATIC FUNCTION ADO_RESYNC( nWA, oRs ) //22.08.15
+
  LOCAL aWAData := USRRDD_AREADATA( nWA )
  LOCAL xKey := "", n, xExpression:="", nRecNo
 
@@ -877,39 +877,18 @@ STATIC FUNCTION ADO_RESYNC( nWA, oRs ) //22.08.15
    ENDIF
 
    TRY
-      IF aWAData[ WA_INDEXACTIVE ] > 0
-         xKey := &( INDEXKEY( 0 ) )
-
-      ELSE
-         FOR n := 1 TO oRecordSet:Fields:Count
-             xKey += cValToChar( rs:Fields( n-1 ):Value )
-             xExpression += rs:Fields( n-1 ):Name
-             IF n = 4
-                EXIT
-
-             ENDIF
-
-         NEXT
-
-      ENDIF
-
+      ADO_RECID( nWA, @nRecNo )
       oRs:Resync( adAffectCurrent, adResyncAllValues )
 
    CATCH
       //IF WE GET HERE OUR RECORD GONE DELETED
       oRs:Requery()
+      ADO_GOTO( nWA, nRecNo )
 
-      IF aWAData[ WA_INDEXACTIVE ] > 0
-         ( nWA )->( ORDSETFOCUS( aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]] ) )
-         ADO_SEEK( nWa, .T., xKey, .F. )
-
-      ELSE
-         DBCREATEINDEX( "TEMP"+ALLTRIM( NETNAME( ) ),( xExpression ) )
-         ORDLISTADD( "TEMP"+ALLTRIM( NETNAME( ) ) )
-         ADO_SEEK( nWa, .T., xKey, .F. )
-         ADO_RECID( nWA, @nRecNo )
-         ADO_ORDLSTCLEAR( nWA )
-         ADO_GOTO( nWA, nRecNo )
+      IF aWAData[ WA_RECORDSET ]:Eof()
+         // record does not exist anymore other app delete it!
+         THROW( ErrorNew( "ADORDD", 10002, 10002, "Record move "+aWAData [ WA_TABLENAME] ,;
+                STR(  nRecNo )+ "was deleted by other app and ADORDD cant reposition " ) )
 
       ENDIF
 
@@ -975,7 +954,7 @@ STATIC FUNCTION ADO_GOTOP( nWA )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL n:= LEN( aWAData[ WA_SCOPES ] )
+   LOCAL n:= LEN( aWAData[ WA_SCOPES ] ), lDeleted
 
    IF !ADOEMPTYSET( oRecordSet )
       ADO_REFRESH( nWA )
@@ -988,7 +967,8 @@ STATIC FUNCTION ADO_GOTOP( nWA )
 
       ENDIF
 
-      IF aWAData[WA_FILTERACTIVE] <> NIL .OR. n > 0
+      ADO_DELETED(nWA,@lDeleted)
+      IF aWAData[WA_FILTERACTIVE] <> NIL .OR. ( SET( _SET_DELETED ) .AND. lDeleted )
          ADO_SKIPFILTER(nWA,1)
       ELSE
          IF !EMPTY(aWAData[WA_PENDINGREL]) .AND. PROCNAME(2) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
@@ -1012,7 +992,7 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL n:= LEN( aWAData[ WA_SCOPES ] )
+   LOCAL n:= LEN( aWAData[ WA_SCOPES ] ), lDeleted
 
    IF !ADOEMPTYSET( oRecordSet )
       ADO_REFRESH( nWA )
@@ -1030,7 +1010,8 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
       ENDIF
 
-      IF aWAData[WA_FILTERACTIVE] <> NIL .OR. n > 0
+      ADO_DELETED(nWA,@lDeleted)
+      IF aWAData[WA_FILTERACTIVE] <> NIL .OR. ( SET( _SET_DELETED ) .AND. lDeleted )
          ADO_SKIPFILTER(nWA,-1)
       ELSE
          IF !EMPTY( aWAData[WA_PENDINGREL] ) .AND. PROCNAME( 2 ) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
@@ -1051,13 +1032,10 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
 
 STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
- /* this is probably not done the wright way but there isnt
-    any documentation . It works use it!
-    */
 
- LOCAL aWAData   := USRRDD_AREADATA( nWA ), lBof
- LOCAL oRecordSet := aWAData[ WA_RECORDSET ],lDeleted,nRecNo
- LOCAL  nToSkip
+ LOCAL aWAData   := USRRDD_AREADATA( nWA )
+ LOCAL oRecordSet := aWAData[ WA_RECORDSET ],lDeleted
+ LOCAL  nToSkip, nRet := HB_SUCCESS
 
   IF ADOEMPTYSET(oRecordSet)
       nToSkip := 0
@@ -1068,121 +1046,32 @@ STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
    nToSkip := iif( nRecords > 0, 1, iif( nRecords < 0, - 1, 0 ) )
 
    IF nToSkip != 0
+      ADO_DELETED(nWA,@lDeleted)
+      DO WHILE ( ( aWAData[ WA_FILTERACTIVE ] <> NIL .AND. !Eval( aWAData[ WA_FILTERACTIVE ] ) );
+         .OR. ( Set( _SET_DELETED ) .AND. lDeleted ) );
+         .AND. ( ! aWAData[ WA_EOF ] .AND.  !aWAData[ WA_BOF ] )
 
-      IF LEN( aWAData[ WA_SCOPES ] ) > 0 .AND. aWAData[WA_FILTERACTIVE] == NIL //SCOPES NOT FILTER
-
-         IF ( nToSkip < 0 .AND. oRecordSet:Bof() ) ;
-             .OR. !ADOSCOPEOK( nWA, 0 )
-            IF ! oRecordSet:Eof()
-               oRecordSet:MoveNext()
-            ENDIF
-            aWAData[ WA_EOF ] := oRecordSet:Eof()
-            aWAData[ WA_BOF ] := .T.
-            IF !ADOSCOPEOK( nWA, 0 )
-               IF !oRecordSet:eof()
-                  oRecordSet:MoveLast()
-                  oRecordset:MoveNext()
-
-               ENDIF
-               aWAData[ WA_EOF ] := .T.
-               aWAData[ WA_BOF ] := .T.
-              // RETURN HB_SUCCESS
-
-            ENDIF
-
-            //RETURN HB_SUCCESS
-
-         ELSEIF ( nToSkip > 0 .AND. oRecordSet:Eof() );
-             .OR. !ADOSCOPEOK( nWA, 1 )
-            IF oRecordSet:Bof()
-               oRecordSet:MovePrevious()
-            ENDIF
-            aWAData[ WA_EOF ] := .T.
-            aWAData[ WA_BOF ] := .F.
-            //RETURN HB_SUCCESS
-
+         IF ! ( ADO_SKIPRAW( nWA, nToSkip, aWAData ) == HB_SUCCESS )
+            RETURN HB_FAILURE
          ENDIF
+         ADO_DELETED(nWA,@lDeleted)
 
-      ELSEIF LEN( aWAData[ WA_SCOPES ] ) = 0 .AND. aWAData[WA_FILTERACTIVE] <> NIL //NOT SCOPES AND FILTER
+      ENDDO
 
-         DO WHILE !EVAL( aWAData[WA_FILTERACTIVE] )
-
-            IF nToSkip < 0 .AND. oRecordSet:Bof()
-               IF !oRecordSet:Eof()
-                  oRecordSet:MoveNext()
-               ENDIF
-               aWAData[ WA_BOF ] := .T.
-               nToSkip := 1
-
-            ELSEIF nToSkip > 0 .AND. oRecordSet:Eof()
-               oRecordset:moveprevious()
-               aWAData[ WA_EOF ] := .T.
-               EXIT
-
-            ENDIF
-            oRecordSet:Move( nToSkip )
-
-         ENDDO
-
-      ELSEIF LEN( aWAData[ WA_SCOPES ] ) > 0 .AND. aWAData[WA_FILTERACTIVE] <> NIL //SCOPES AND FILTER
-
-         DO WHILE  !EVAL( aWAData[WA_FILTERACTIVE] )
-
-            IF ( nToSkip < 0 .AND. oRecordSet:Bof() ) ;
-               .OR. !ADOSCOPEOK( nWA, 0 )
-               IF ! oRecordSet:Eof()
-                  oRecordSet:MoveNext()
-
-               ENDIF
-               nToSkip := 1
-               aWAData[ WA_BOF ] := .T.
-               aWAData[ WA_EOF ] := oRecordSet:Eof()
-
-               IF !ADOSCOPEOK( nWA, 0 )
-                  IF !oRecordSet:eof()
-                     oRecordSet:MoveLast()
-                     oRecordset:MoveNext()
-
-                  ENDIF
-                  aWAData[ WA_EOF ] := .T.
-                  aWAData[ WA_BOF ] := .T.
-                  EXIT
-
-               ENDIF */
-
-             ELSEIF ( nToSkip > 0 .AND. oRecordSet:Eof() ) .OR. !ADOSCOPEOK( nWA, 1 )
-                IF oRecordSet:Bof()
-                   oRecordSet:MovePrevious()
-                ENDIF
-
-                aWAData[ WA_EOF ] := .T.
-                aWAData[ WA_BOF ] := .F.
-
-                EXIT
-
-             ENDIF
-
-             oRecordSet:Move( nToSkip )
-
-         ENDDO
-
+      IF ! Empty( aWAData[ WA_PENDINGREL ] )
+         ADO_FORCEREL( nWA )
       ENDIF
 
    ENDIF
 
-   //ENFORCE RELATIONS SHOULD BE BELOW AFTER MOVING TO NEXT RECORD
-   IF ! Empty( aWAData[ WA_PENDINGREL ] )
-      ADO_FORCEREL( nWA )
-   ENDIF
-
-   RETURN HB_SUCCESS
+   RETURN nRet
 
 
 STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
 
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
-   LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL nResult := HB_SUCCESS,nRecno,lBof,lEof
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
+ LOCAL nResult := HB_SUCCESS,nRecno,lBof,lEof
 
   IF ADOEMPTYSET(oRecordSet)
       nToSkip := 0
@@ -1196,38 +1085,71 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
 
       IF aWAData[ WA_EOF ]
          IF nToSkip > 0
-            RETURN HB_SUCCESS
+            RETURN HB_FAILURE
+
+         ELSE
+            ADO_GOBOTTOM( nWA )
+            ++nToSkip
+            aWAData[ WA_EOF ] := .F.
 
          ENDIF
-         ADO_GOBOTTOM( nWA )
-         ++nToSkip
 
       ENDIF
 
-      IF nToSkip < 0 .AND. oRecordSet:AbsolutePosition <= - nToSkip
-         IF LEN( aWAData[ WA_SCOPES ] ) = 0 .AND. aWAData[WA_FILTERACTIVE] = NIL
-            oRecordSet:Movefirst()
-         ELSE
-            ADO_GOTOP( nWa )
-         ENDIF
+      IF ( nToSkip < 0 .AND. oRecordSet:Bof() )
+         ADO_GOTOP( nWa )
          aWAData[ WA_BOF ] := .T.
-         aWAData[ WA_EOF ] := oRecordSet:EOF
+         aWAData[ WA_EOF ] := .F.
+         RETURN HB_FAILURE
 
       ELSEIF nToSkip != 0
-         oRecordSet:Move( nToSkip )
-         aWAData[ WA_BOF ] := .F.
-         aWAData[ WA_EOF ] := oRecordSet:EOF
+         IF ( nToSkip > 0 .AND.!oRecordSet:Eof ) .OR. ;
+            ( nToSkip < 0 .AND.!oRecordSet:Bof )
+            oRecordSet:Move( nToSkip )
+
+            IF nToSkip > 0
+               IF ! ADOSCOPEOK( nWA, 1 )
+                  aWAData[ WA_BOF ] := .F.
+                  aWAData[ WA_EOF ] := .T.
+
+               ELSE
+                  aWAData[ WA_BOF ] := .F.
+                  aWAData[ WA_EOF ] := oRecordSet:EOF
+
+               ENDIF
+
+
+            ELSEIF nToSkip < 0
+               IF ! ADOSCOPEOK( nWA, 0 ) .OR. oRecordSet:Bof()
+                  ADO_GOTOP( nWA )
+                  aWAData[ WA_BOF ] := .T.
+                  aWAData[ WA_EOF ] := .F.
+
+               ELSE
+                  aWAData[ WA_BOF ] := oRecordSet:BOF//.F.
+                  aWAData[ WA_EOF ] := oRecordSet:EOF
+
+               ENDIF
+
+            ENDIF
+
+         ELSE
+            aWAData[ WA_EOF ] := oRecordSet:EOF
+            aWAData[ WA_BOF ] := oRecordSet:BOF
+            RETURN HB_FAILURE
+
+         ENDIF
 
       ENDIF
 
    ELSE
       //MAYBE REFRESH THE SET AS IN CLIPPER SKIP 0
       //ENFORCE RELATIONS SHOULD BE BELOW AFTER MOVING TO NEXT RECORD
-      ADO_REFRESH( nWA )
       IF ! Empty( aWAData[ WA_PENDINGREL ] )
          ADO_FORCEREL( nWA )
       ENDIF
 
+      RETURN HB_FAILURE
    ENDIF
 
    RETURN nResult
@@ -1261,7 +1183,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    LOCAL aStruct, cBaseTable, n, oField, u
    LOCAL aCols := {}, aVals := {}
    LOCAL lAdded   := .f.,nRecNo
-   LOCAL aLockInfo := ARRAY( UR_LI_SIZE ),oError
+   LOCAL aLockInfo := ARRAY( UR_LI_SIZE ),oError, aBookMark := {}
 
     IF !ADOCON_CHECK()
        RETURN HB_FAILURE
@@ -1282,7 +1204,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
     NEXT
 
     IF ! EMPTY( aCols )
-       TRY
+//       TRY
           aLockInfo[ UR_LI_RECORD ] := ADORECCOUNT(nWA,oRs)+1 //GHOST NEXT RECORD TO BE LOCKED
           aLockInfo[ UR_LI_METHOD ] := DBLM_MULTIPLE
           aLockInfo[ UR_LI_RESULT ] := .F.
@@ -1309,6 +1231,25 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 
           oRs:AddNew( aCols, aVals )
           oRs:Update()
+          IF  aWData[ WA_INDEXACTIVE ] > 0 .AND. LEN( aWData[ WA_ABOOKMARKS ] [ aWData[ WA_INDEXACTIVE ] ] ) > 0
+              //WITH FOR CONDITION NO RECORDS ARE ADDED ONLY REMOVED IN ADO_PUTVALUE
+              //WHEN FOR IS EVALUATED FALSE
+              IF EMPTY ( aWData[WA_INDEXFOR][aWData[ WA_INDEXACTIVE ]] )
+                 xBook := oRs:BookMark
+                 AADD( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]] ,{oRs:BookMark ,&( INDEXKEY( 0 ) ) } )
+                 IF UPPER( SUBSTR( aWData[ WA_INDEXDESC ] [ aWData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
+                    ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
+                 ELSE
+                    ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] < y[ 2 ] } )
+
+                 ENDIF
+
+                 aBookMarks := aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]]
+                 aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
+                 oRs:Filter := aBookMarks
+                 oRs:BookMark := xBook
+              ENDIF
+          ENDIF
 
           aWData[ WA_EOF ] := oRs:Eof()
           aWData[ WA_BOF ] := oRs:Bof()
@@ -1318,11 +1259,11 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
           ADO_RECID( nWA, @nRecNo )
           aWData[ WA_RECCOUNT ] := aLockInfo[ UR_LI_RECORD ]
 
-       CATCH
+/*       CATCH
           NETERR(.T.)
           ADOSHOWERROR( aWdata[WA_CONNECTION] )
 
-       END
+       END*/
 
     ELSE
        NETERR(.T.)
@@ -1363,7 +1304,7 @@ STATIC FUNCTION ADO_TRANS(  nWA, aTransInfo )
   SELECT(SrcArea)
   nRecno := RECNO()
 
-  DO WHILE EVAL( aScopeInfo[UR_SI_BWHILE] ) .AND.!oRs:Eof()
+  DO WHILE EVAL( aScopeInfo[UR_SI_BWHILE] ) .AND.!(SrcArea)->(EOF()) //!oRs:Eof()
      IF EVAL(aScopeInfo[UR_SI_BFOR])
         (DstArea)->(DBAPPEND())
         FOR n := 1 TO (SrcArea)->(FCOUNT())
@@ -1375,7 +1316,7 @@ STATIC FUNCTION ADO_TRANS(  nWA, aTransInfo )
 
      ENDIF
 
-     oRs:MoveNext()
+     DBSKIP() //oRs:MoveNext() TO ENFORCE RELATIONS SCOPES AND FILTERS
 
   ENDDO
 
@@ -1398,24 +1339,53 @@ STATIC FUNCTION ADO_TRANS(  nWA, aTransInfo )
 /*                           END RECORD RELATED FUNCTION                   */
 
 /*                                      DELETE RECALL ZAP PACK                  */
-STATIC FUNCTION ADO_DELETED( nWA, lDeleted )
+//maromano
+STATIC FUNCTION ADO_GET_nFIELD_DELETED( oRs ,cTablename )
 
+  LOCAL cFieldName := ADODEFLDDELETED() //default recno field name
+  LOCAL aFiles :=  ListFieldDeleted(),n
+  LOCAL aStruct := ADOSTRUCT( oRs ),nField
+
+  IF !EMPTY( aFiles ) //IS THERE A FIELD AS Deleted DIFERENT FOR THIS TABLE
+     n := ASCAN( aFiles, { |z| z[1] == cTablename } )
+     IF n > 0
+        cFieldName := aFiles[n,2]
+
+     ENDIF
+
+  ENDIF
+
+  nField := ASCAN( aStruct, {|x| x[1] == cFieldName })
+  IF nField == 0
+     nField := NIL
+
+  ENDIF
+
+  RETURN nField
+
+
+STATIC FUNCTION ADO_GET_FIELD_DELETED( cTablename )
+
+  LOCAL cFieldName := ADODEFLDDELETED() //default recno field name
+  LOCAL aFiles :=  ListFieldDeleted(),n
+
+   IF !EMPTY( aFiles ) //IS THERE A FIELD AS Deleted DIFERENT FOR THIS TABLE
+      n := ASCAN( aFiles, { |z| z[1] == cTablename } )
+      IF n > 0
+         cFieldName := aFiles[n,2]
+      ENDIF
+
+   ENDIF
+
+   RETURN cFieldName
+
+
+STATIC FUNCTION ADO_DELETED( nWA, lDeleted )
+   LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
 
     IF !ADOEMPTYSET(oRecordSet)
-       IF !oRecordSet:Eof .AND. !oRecordSet:Bof
-          IF oRecordSet:Status = adRecDeleted
-             lDeleted := .T.
-          ELSE
-             lDeleted := .F.
-          ENDIF
-       ELSE
-          lDeleted := .F.
-       ENDIF
-
-    ELSE
-       lDeleted := .F.
-
+       ADO_GETVALUE( nWA, aWAData[WA_FIELDDELETED]+1, @lDeleted )
     ENDIF
 
    RETURN HB_SUCCESS
@@ -1425,58 +1395,19 @@ STATIC FUNCTION ADO_DELETE( nWA )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
-   LOCAL lDeleted := .F.,nRecNo, oError, xBook, aBookMarks := {}
+   LOCAL lDeleted := .F., oError, xBook, aBookMarks := {},nRecNo
 
-   IF !ADOCON_CHECK()
+   IF !ADOCON_CHECK() .OR. ADOEMPTYSET( oRecordSet )
       RETURN HB_FAILURE
 
    ENDIF
 
    IF ADORECCOUNT( nWA,oRecordSet ) > 0 // AHF SEE FUNCTION FOR EXPLANATION oRecordSet:RecordCount()
       IF !oRecordSet:Eof .AND. !oRecordSet:Bof
-         ADO_RECID( nWa, @nRecNo )
-
+         ADO_RECID( nWA, @nRecNo )
          IF ADO_ISLOCKED(aWAData[ WA_TABLENAME],nRecNo, aWAData)
-            xBook := oRecordSet:BookMark
-            oRecordSet:Delete()
-            oRecordSet:Update()
+            ADO_PUTVALUE( nWA, aWAData[WA_FIELDDELETED]+1, .T. )
             lDeleted = .T.
-            //DELETE ALSO THE BOOKMARK FROM THE ORDER
-            IF LEN( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ] ] ) > 0
-               //take it out from index
-               Y := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]],;
-                 {| x | x[ 1 ] = xBook  } )
-               ADEL( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], y, .T. )
-               aBookMarks := aWAData[ WA_ABOOKMARKS ][n]
-               aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
-
-            ENDIF
-
-            IF oRecordSet:RecordCount() > 0 //28.5.15 TESTED BY LUCAS
-               IF !oRecordSet:Bof()
-                  oRecordSet:MovePrevious()
-
-               ELSE
-                  oRecordSet:MoveFirst() //22.08.15
-
-               ENDIF
-               //REPOSITION AFTER FIRST MOVE
-               IF LEN( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ] ] ) > 0
-                  xBook := oRecordSet:BookMark
-                  oRecordSet:Filter := aBookMarks
-                  oRecordSet:BookMark := xBook
-
-               ENDIF
-
-            ELSE
-               oRecordSet:Requery() // otherwise recordset becomes nuts
-            ENDIF
-
-            //29.5.15 	doesnt work for multiple deletions inside a loop
-            //oRecordSet:AbsolutePosition := Max( 1, Min( tmp, oRecordSet:RecordCount() ) ) //SAME USED IN ADOFUNCS
-            aWAData[ WA_EOF] := oRecordSet:Eof()
-            aWAData[ WA_BOF] := oRecordSet:Bof()
-
          ELSE
             //ERROR UNLOCK
             oError := ErrorNew()
@@ -1498,9 +1429,39 @@ STATIC FUNCTION ADO_DELETE( nWA )
    RETURN IF( lDeleted, HB_SUCCESS, HB_FAILURE )
 
 
-STATIC FUNCTION ADO_RECALL( nRecno )
-   MSGALERT("RECALL NOT POSSIBLE IN SQL!")
-   RETURN HB_SUCCESS
+STATIC FUNCTION ADO_RECALL( nWA )
+
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
+ LOCAL oError, nRecNo
+
+  IF !ADOCON_CHECK()
+     RETURN HB_FAILURE
+
+  ENDIF
+
+  IF !ADOEMPTYSET( oRecordSet )
+     ADO_RECID( nWA, @nRecNo )
+     IF ADO_ISLOCKED(aWAData[ WA_TABLENAME],nRecNo, aWAData)
+        ADO_PUTVALUE( nWA, aWAData[WA_FIELDDELETED]+1, .F. )
+
+     ELSE
+        //ERROR UNLOCK
+        oError := ErrorNew()
+        oError:GenCode := EG_UNLOCKED
+        oError:SubCode := 1022
+        oError:Description := hb_langErrMsg( EG_UNLOCKED )
+        oError:FileName := aWAData[ WA_TABLENAME]
+        oError:OsCode := 0 /* TODO */
+        oError:CanDefault := .T.
+        UR_SUPER_ERROR( nWA, oError )
+        RETURN HB_FAILURE
+
+     ENDIF
+
+  ENDIF
+
+  RETURN HB_SUCCESS
 
 
 STATIC FUNCTION ADO_ZAP( nWA )
@@ -1513,6 +1474,16 @@ STATIC FUNCTION ADO_ZAP( nWA )
 
    ENDIF
 
+   IF !ADO_ISLOCKED(aWAData[ WA_TABLENAME], 0, aWAData)
+      oError := ErrorNew()
+      oError:GenCode     := EG_UNLOCKED
+      oError:SubCode     := 1022 // EDBF_UNLOCKED
+      oError:Description := hb_langErrMsg( EG_UNLOCKED )
+      oError:FileName    := aWAData[ WA_TABLENAME ]
+      UR_SUPER_ERROR( nWA, oError )
+      RETURN HB_FAILURE
+   ENDIF
+
    //AUTOINC FIELDS LIKE RECNO MUST BE RESET
    IF aWAData[ WA_CONNECTION ] != NIL .AND. aWAData[ WA_TABLENAME ] != NIL
       TRY
@@ -1523,9 +1494,7 @@ STATIC FUNCTION ADO_ZAP( nWA )
 
       END
 
-      oRecordSet:Requery()
-      aWAData[ WA_EOF] := oRecordSet:Eof()
-      aWAData[ WA_BOF] := oRecordSet:Bof()
+      ADO_REFRESH( nWA, .T. )
 
    ENDIF
 
@@ -1534,10 +1503,30 @@ STATIC FUNCTION ADO_ZAP( nWA )
 
 STATIC FUNCTION ADO_PACK( nWA )
 
-   //DOES NOTHING BECAUSE RECORDS ARE AUTOMATICLY REMOVED WHEN DELETED
-   HB_SYMBOL_UNUSED( nWA )
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ],oError
 
-   RETURN HB_SUCCESS
+  IF !ADOCON_CHECK()
+     RETURN HB_FAILURE
+
+  ENDIF
+
+  IF !ADO_ISLOCKED(aWAData[ WA_TABLENAME], 0, aWAData)
+     oError := ErrorNew()
+     oError:GenCode     := EG_UNLOCKED
+     oError:SubCode     := 1022 // EDBF_UNLOCKED
+     oError:Description := hb_langErrMsg( EG_UNLOCKED )
+     oError:FileName    := aWAData[ WA_TABLENAME ]
+     UR_SUPER_ERROR( nWA, oError )
+     RETURN HB_FAILURE
+  ENDIF
+  cSql := "DELETE FROM "+  aWAData[ WA_TABLENAME ]  + " WHERE "+ ADO_GET_FIELD_DELETED(aWAData[ WA_TABLENAME])+ " <> 0 "
+  aWAData[ WA_CONNECTION ]:Execute( cSql )
+
+  MEMOWRIT( "packsql.txt", cSql )
+  ADO_REFRESH( nWA, .T. )
+
+  RETURN HB_SUCCESS
 /*                             END OF DELETE RECALL ZAP PACK              */
 
 
@@ -1593,7 +1582,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 
       CATCH  //DELETED OR CHANGED RECORDS RECORDSET OUTDATED
          ADO_RECID(nWA, @nRecNo)
-         rs:Requery()
+         ADO_REFRESH( nWA, .T. )
          ADO_GOTO(nWa, nRecNo) //IF DELETED (not found) GOES EOF THEN TRYING TO LOCK IT WILL FAIL NO UPDATE POSSIBLE
 
          ADO_GETVALUE( nWA, nField, xValue )
@@ -1676,11 +1665,17 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
    LOCAL nRecNo, aOrderInfo  := ARRAY(UR_ORI_SIZE),oError,cDateFormat
    //10.08.15
    LOCAL aStruct := ADO_FIELDSTRUCT( oRecordSet, nField-1 ),xBook
-   LOCAL aBookMarks := {}
+   LOCAL aBookMarks := {}, bForExp, nPos
 
    IF !ADOCON_CHECK()
       RETURN HB_FAILURE
 
+   ENDIF
+
+   //DELETED FIELD ONLY UPDATABLE BY RECALL OR DBDELETE
+   IF nField-1 = aWAData[WA_FIELDDELETED] .AND.( PROCNAME(1) <> "ADO_DELETE";
+          .AND. PROCNAME(1) <> "ADO_RECALL" )
+      RETURN HB_SUCCESS
    ENDIF
 
    IF ! aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xValue )
@@ -1756,11 +1751,18 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                ENDIF
 
             ELSE
-               IF aWAData[ WA_LOCKSCHEME ] //.OR. ;// 18.06.15 to work safely without locks
+               IF 1<>1
+                  //DEACTIVATED BECAUSE SOMETIMES IN A LOOP GIVES ERROR STATUS 2048
+                  //CONCURRENCY WITHOUT ANYONE ELSE ITH THIS ROW!
+                  //aWAData[ WA_LOCKSCHEME ] //.OR. ;// 18.06.15 to work safely without locks
                   //PROCNAME( 1 ) = "__DBCOPY" //11.08.15 copy below errors dont know why
                   oRecordSet:Fields( nField - 1 ):Value := xValue
-                  oRecordSet:Update()
-
+                  TRY
+                     oRecordSet:Update()
+                  CATCH
+                     ADOSTATUSMSG( oRecordSet:Status,oRecordSet:Fields( nField - 1 ):Name,;
+                      oRecordSet:Fields( nField - 1 ):Value, xValue, oRecordSet:LockType )
+                  END
                ELSE // 18.06.15 to work safely without locks
                   DO CASE
                      CASE aStruct[2] = "L"
@@ -1776,7 +1778,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                        ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ),;
                        aWAData[ WA_ENGINE ] )  + " = " + xValue +" WHERE "+;
                        ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
-                                        aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 11, 0 ) ) )
+                                        aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 11, 0 ) ))
 
                    //22.08.15
                    IF PROCNAME( 1 ) <> "__DBCOPY"
@@ -1787,27 +1789,36 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
             ENDIF
 
-            IF LEN( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ] ] ) > 0
-               //as soon as we alter expresson of the record
-               // ONLY TO DO IF FIELD IN ORDER BY
-               IF ALLTRIM(oRecordSet:Fields( nField - 1 ):Name) $  INDEXKEY( 0 )
-                  xBook := oRecordSet:BookMark
-                  aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]][ 2 ] := &( INDEXKEY( 0 ) )
-                  IF UPPER( SUBSTR( aWAData[ WA_INDEXDESC ] [ aWAData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
-                     ASORT( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
+            IF  aWAData[ WA_INDEXACTIVE ] > 0 .AND. LEN( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ] ] ) > 0
+                xBook := oRecordSet:BookMark
+                nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
+                              {|x|  x[ 1 ] = xBook  } )
+                IF aWAData[WA_INDEXFOR][aWAData[ WA_INDEXACTIVE ]] <> ""
+                   bForExp :=  &("{ ||"+ aWAData[WA_INDEXFOR][aWAData[ WA_INDEXACTIVE ]] +"}" )
+                   IF !EVAL( bForExp )
+                      ADEL( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ]], nPos, .T. )
+                   ENDIF
+                ELSE
+                   //as soon as we alter expresson of the record
+                   // ONLY TO DO IF FIELD IN ORDER BY
+                   IF ALLTRIM(oRecordSet:Fields( nField - 1 ):Name) $  INDEXKEY( 0 )
+                      xBook := oRecordSet:BookMark
+                      aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]][ 2 ] := &( INDEXKEY( 0 ) )
+                      IF UPPER( SUBSTR( aWAData[ WA_INDEXDESC ] [ aWAData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
+                         ASORT( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
 
-                  ELSE
-                     ASORT( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] < y[ 2 ] } )
+                      ELSE
+                         ASORT( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] < y[ 2 ] } )
 
-                  ENDIF
+                      ENDIF
 
-                  aBookMarks := aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]]
-                  aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
-                  oRecordSet:Filter := aBookMarks
-                  oRecordSet:BookMark := xBook
+                      aBookMarks := aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]]
+                      aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
+                      oRecordSet:Filter := aBookMarks
+                      oRecordSet:BookMark := xBook
 
-               ENDIF
-
+                   ENDIF
+                ENDIF
             ENDIF
 
             IF aStruct[2] $ "DT"
@@ -1829,7 +1840,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
          ENDIF
 
       ELSE
-         RETURN HB_FAILURE
+         RETURN HB_SUCCESS
 
       ENDIF
 
@@ -1978,7 +1989,7 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n ) // ( oRs, nFld ) where nFld is 1 based
       cType    := 'D'
       nLen     := 8
 
-      IF oRs != nil .AND. ! oRs:Eof() .AND. VALTYPE( uVal := oField:Value ) == 'T'
+      IF oRs != nil .AND. ! oRs:Eof() .AND. ! oRs:Bof() .AND. VALTYPE( uVal := oField:Value ) == 'T'
          //.AND. FW_TIMEPART( uVal ) >= 1.0 WHERE IS THIS FUNCTION?
          cType      := 'T'
          nDBFFieldType := HB_FT_TIMESTAMP // DONT KNWO IF IT IS CORRECT!
@@ -2505,7 +2516,6 @@ STATIC FUNCTION ADOSCOPEOK( nWA, nOption )
 
      IF aWAData[ WA_SCOPETOP ][y]  = aWAData[ WA_SCOPEBOT ][y]
         lRetval := ! ( SUBSTR( &( INDEXKEY( 0 ) ), 1, LEN(aWAData[ WA_SCOPETOP ][y] ) ) <>  aWAData[ WA_SCOPETOP ][y] )
-//     MSGINFO( aWAData[ WA_SCOPETOP ][y]  +"    "+ aWAData[ WA_SCOPEBOT ][y]+ " "+CVALTOCHAR(LRETVAL) )
 
      ELSE
         IF nOption = 0 //top
@@ -2593,12 +2603,11 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
             aBookMarks := aWAData[ WA_ABOOKMARKS ][n]
             aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
             oRecordSet:Filter := aBookMarks
-//msginfo("filter CREATED")
+
          ELSE
             //INDEX FROM SET ADODBF INDEX MIGHT HAVE UDFS OR CONDITIONS
             //MUST BYUILDNOW THE ARRAY ORDERED
             IF ADOUDFINDEX( nWa, cExpression, cCondition, lUnique, lDesc, , , ,@aBookMarks )
-//msginfo("filter1 "+str(len(aBookMarks)))
 
                oRecordSet:Sort := ""
                aWAData[ WA_ABOOKMARKS ][n] := aBookMarks
@@ -2612,7 +2621,7 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
                cSql := ALLTRIM( SUBSTR( cSql, AT( "ORDER BY", cSql )+9 ) )
                cSql := cSql
                oRecordSet:Sort :=  cSql
-//msginfo("sem filter")
+
             ENDIF
 
          ENDIF
@@ -3041,7 +3050,7 @@ STATIC FUNCTION ADO_ORDDESTROY( nWA, aOrderInfo )
       ADEL( aWAData[ WA_INDEXES ], n, .T.)
       ADEL( aWAData[ WA_INDEXEXP ], n, .T.)
       ADEL( aWAData[ WA_INDEXFOR ], n, .T.)
-      ADEL( aWAData[WA_UNIQUE], n, .T.)
+      ADEL( aWAData[WA_INDEXUNIQUE], n, .T.)
       ADEL( aWAData[ WA_ABOOKMARKS ], n, .T.)
       ADEL( aWAData[WA_INDEXDESC] , n, .T.)
 
@@ -3273,11 +3282,6 @@ STATIC FUNCTION ADO_LOCK( nWA, aLockInfo )
    IF lOK
       IF PROCNAME( 1 ) <> "ADO_APPEND" //NEW RECNO STILL DONT EXIST IN TABLE RECCUNT+1
          ADO_RESYNC( nWA, oRs )
-         ADO_RECID(nWa,@nRecNo)
-         IF nRecno <> aLockInfo[ UR_LI_RECORD ]
-            ADO_UNLOCK( nWA, aLockInfo[ UR_LI_RECORD ] )
-            lOk := .F.
-         ENDIF
 
       ENDIF
 
@@ -3504,12 +3508,12 @@ STATIC FUNCTION ADO_OPENSHARED( nWA,cTable, lExclusive, lClose )
   aLockCtrl :=  ADOLOCKCONTROL()
   cFile := STRTRAN(aLockCtrl[1],"TLOCKS","")+cTable+".ctrl"
 
-  //TEMPORARY TABLES ARE PRIVATE TO THE USER DONT NEED LOCK CONTROL
+  /* //TEMPORARY TABLES ARE PRIVATE TO THE USER DONT NEED LOCK CONTROL
   IF UPPER( SUBSTR( aWAData[WA_TABLENAME] ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( aWAData[WA_TABLENAME] ,1,4 ) ) = "TEMP" .OR.;
       UPPER( SUBSTR( aWAData[WA_TABLENAME] ,1,4 ) ) = "#TMP" .OR. UPPER( SUBSTR( aWAData[WA_TABLENAME] ,1,5 ) ) = "#TEMP"
      RETURN .T.
 
-  ENDIF
+  ENDIF */
 
   IF !lClose
      IF !FILE( cFile)
@@ -3617,7 +3621,7 @@ FUNCTION ADOROLLBACKTRANS(nWa)
      FOR n := 1 TO 255
          oRs := hb_adoRddGetRecordSet(n)
          IF VALTYPE(oRs) = "O"
-            oRS:Requery()
+            ADO_REFRESH( nWA, .T. )
             aWAData := USRRDD_AREADATA( n )
          ENDIF
 
@@ -3740,7 +3744,7 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
       oError:GenCode := 1201
       oError:SubCode := 1201
       oError:Description :=  "Work area not indexed"
-      oError:FileName := ALIAS(aRelInfo[ UR_RI_CHILD ])
+      oError:FileName := ALIAS(nWA)
       oError:OsCode := 0 // TODO
       oError:CanDefault := .F.
       UR_SUPER_ERROR( nWA, oError )
@@ -4257,7 +4261,7 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
 
    IF cDbEngine = "ACCESS" //t_cEngine WITH DEFAULT VALUE BU ADODEFAULTS
       IF !FILE(cDataBase)
-         oCatalog    := TOleAuto():New( "ADOX.Catalog" )
+         oCatalog    := ADOCLASSNEW( "ADOX.Catalog" ) //TOleAuto():New( "ADOX.Catalog" )
          oCatalog:Create( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDataBase )
       ENDIF
 
@@ -4266,6 +4270,20 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
    aOpenInfo[ UR_OI_NAME ] := CFILENOEXT( CFILENOPATH( cTable ) )
 
    ADOCONNECT(nWA,aOpenInfo)
+
+   /*
+   add HBDELETED BY MAROMANO
+   */
+   n := ASCAN( aWAData[ WA_SQLSTRUCT ],{ |x| x[1] = ADO_GET_FIELD_DELETED(  aWAData[ WA_TABLENAME ] ) }  )
+   IF n == 0
+      AADD( aWAData[ WA_SQLSTRUCT ], {  ADO_GET_FIELD_DELETED(  aWAData[ WA_TABLENAME ] ), 'L', 1, 0 } )
+
+   ELSE  //FIX AHF CAN ALREADY EXIST AND NOT LOGICAL FIELD
+      aWAData[ WA_SQLSTRUCT ][n,2] := "L"
+      aWAData[ WA_SQLSTRUCT ][n,3] :=  1
+      aWAData[ WA_SQLSTRUCT ][n,4] := 0
+
+   ENDIF
 
    /*
    fix to add HBRECNO if it´s not present  // Lucas De Beltran 23.05.2015
@@ -4294,7 +4312,7 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
    TRY
        //TEMPORARY TABLES ARE DESTROYE AUTO WHEN NO NEEDED ANYMORE
        IF UPPER( SUBSTR( cTmpTable ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( cTmpTable ,1,4 ) ) = "TEMP"
-          cMarkTmp := ADOTEMPTABLE( cDbEngine )
+          cMarkTmp := ADOTEMPTABLE( cDbEngine, aWAData[ WA_CONNECTION ], aWAData[ WA_TABLENAME ] )
           //we need to create the file in order to eventually test file() works in the app
           MEMOWRIT(cTable,"nada")
 
@@ -4565,9 +4583,19 @@ STATIC FUNCTION ADOUNQUOTE( cCol )
   RETURN cCol
 
 
-STATIC FUNCTION ADOTEMPTABLE(DbEngine)
+STATIC FUNCTION ADOTEMPTABLE( DbEngine, oCon, cTable)
  LOCAL cMark := ""
 
+  TRY
+    oCon:Execute( "DROP TABLE " + cTable )
+  CATCH
+    //DO NOTHING IF DOE NOT EXIST
+  END
+  cMark := "TABLE "
+
+/*
+  suspended seems to work strange n updates
+  sometimes not visible to the owner
   DO CASE
 
      CASE dbEngine = "ADS"
@@ -4588,7 +4616,7 @@ STATIC FUNCTION ADOTEMPTABLE(DbEngine)
           cMark    := "TEMPORARY TABLE "
 
      CASE dbEngine = "MYSQL"
-          cMark :=  "TEMPORARY TABLE "
+          cMark :=   "TEMPORARY TABLE "
 
      CASE dbEngine = "FOXPRO"
           cMark     := "TABLE "
@@ -4600,14 +4628,14 @@ STATIC FUNCTION ADOTEMPTABLE(DbEngine)
           cMark     := "TEMPORARY TABLE "
 
   ENDCASE
-
+*/
   RETURN cMark
 
 
 STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
    LOCAL lRet := .F.
-   LOCAL oRs := TOleAuto():New( "ADODB.Recordset" )
+   LOCAL oRs := ADOCLASSNEW( "ADODB.Recordset" )//TOleAuto():New( "ADODB.Recordset" )
    LOCAL aIndexes := ListIndex(), z, y
 
    IF !ADOCON_CHECK()
@@ -4640,7 +4668,8 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
               IF ! oRs:Eof()
                  IF UPPER( SUBSTR( cTable ,1,3 ) ) = "TMP" .OR. UPPER( SUBSTR( cTable ,1,4 ) ) = "TEMP" //24.06.15
-                    oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'LOCAL TEMPORARY'"
+                    //oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'LOCAL TEMPORARY'"
+                    oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
                  ELSE
                     oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
                  ENDIF
@@ -5187,6 +5216,40 @@ STATIC FUNCTION ADOLUPDATE(  aWAData  )
 
 /*                    ADO SET GET FUNCTONS */
 
+STATIC FUNCTION ADOCLASSNEW( cString )
+ LOCAL cClass := ADODEFAULTS()[6]
+  RETURN IF( cClass <> NIL, cClass:New( cString ), TOleAuto():New( cString ) )
+
+
+STATIC FUNCTION ADOSTATUSMSG( nStatus, fName, xValue, xNewValue, LockType )
+ LOCAL aMsgs := {"16 The record was not saved because its bookmark is invalid.",;
+                 "64 The record was not saved because it would have affected multiple records.",;
+                 "128 The record was not saved because it refers to a pending insert.",;
+                 "256 The record was not saved because the operation was canceled.",;
+                 "1024 The new record was not saved because of existing record locks.",;
+                 "2048 The record was not saved because optimistic concurrency was in use.",;
+                 "4096 The record was not saved because the user violated integrity constraints.",;
+                 "8192 The record was not saved because there were too many pending changes.",;
+                 "16384 The record was not saved because of a conflict with an open storage object.",;
+                 "32768 The record was not saved because the computer has run out of memory.",;
+                 "65536 The record was not saved because the user has insufficient permissions.",;
+                 "131072 The record was not saved because it violates the struture of the underlying database.",;
+                 "262144 The record has already been deleted from the data source." }
+ LOCAL nPos, cErr := ""
+  cErr     += CRLF + PROCNAME( 2 )  + cValToChar( PROCLINE( 2 ) )
+  cErr     += CRLF + PROCNAME( 3 )  + cValToChar( PROCLINE( 3 ) )
+  cErr     += CRLF + PROCNAME( 4 )  + cValToChar( PROCLINE( 4 ) )
+  cErr     += CRLF + PROCNAME( 5 )  + cValToChar( PROCLINE( 5 ) )
+  cErr     += CRLF + PROCNAME( 6 )  + cValToChar( PROCLINE( 6 ) )
+  cErr     += CRLF + PROCNAME( 7 )  + cValToChar( PROCLINE( 7 ) )
+
+  nPos := ASCAN( aMsgs, {| x | AT( ALLTRIM( STR( nStatus ) ), x ) > 0 } )
+  MSGALERT( "Field name "+fName+CRLF+" Actual value "+CVALTOCHAR( xValue ) +CRLF+;
+   " New value "+CVALTOCHAR( xNewValue )+CRLF+;
+   " Record number "+STR( RECNO( ) )+" Lock Type "+STR( locktype )+ CRLF+ aMsgs[ nPos ]+CRLF+cErr )
+
+  RETURN NIL
+
 
 FUNCTION ADOSHOWERROR( oCn, lSilent )
 
@@ -5319,11 +5382,90 @@ FUNCTION hb_adoRddGetTableName( nWA )
    RETURN iif( aWAData != NIL, aWAData[ WA_TABLENAME ], NIL )
 
 
+FUNCTION hb_adoRddGetTables( oCn )
+
+   LOCAL lRet := .T., aTables := {}
+   LOCAL oRs := ADOCLASSNEW( "ADODB.Recordset" )//TOleAuto():New( "ADODB.Recordset" )
+
+   IF !ADOCON_CHECK()
+      RETURN HB_FAILURE
+
+   ENDIF
+
+   DEFAULT oCn TO oConnection
+
+   IF EMPTY(oCn)
+      MSGALERT("No connection estabilished! Please open some table to have a connection ")
+      RETURN .F.
+
+   ENDIF
+
+   TRY
+       oRs      := oCn:OpenSchema( adSchemaTables )
+       lRet   := !( oRs:Bof .and. oRs:Eof )
+
+   CATCH
+          // Older ADO version not supporting second parameter
+       TRY
+          oRs   := oCn:OpenSchema( adSchemaTables )
+
+          IF ! oRs:Eof()
+             oRs:Filter  := "TABLE_NAME = '" + cTable + "' AND TABLE_TYPE = 'TABLE'"
+             lRet   := !( oRs:Bof .and. oRs:Eof )
+
+          ENDIF
+
+       CATCH
+          lRet := .F.
+          // OpenSchema(adSchemaTables) is not supported by provider
+          // we do not know if the table exists
+          ADOSHOWERROR( oCn )  // Comment out in final release
+
+       END
+   END
+
+   IF lRet
+      oRs:MoveFirst()
+      DO WHILE ! oRs:Eof()
+         AADD( aTables, oRs:Fields( 2 ):Value )
+         oRs:moveNext()
+      ENDDO
+
+   ENDIF
+
+   oRs:Close()
+
+  RETURN aTables
+
+
 FUNCTION hb_adoRddExistsTable( oCn, cTable, cIndex, cView )
    RETURN ADOFILE( oCn, cTable, cIndex, cView )
 
 FUNCTION hb_adoRddDrop( oCn, cTable, cIndex, cView, DBEngine )
    RETURN ADODROP( oCn, cTable, cIndex, cView,  DBEngine )
+
+
+// field name bit to use as deleted per each table {{"CTABLE","CFIELDNAME"} }
+FUNCTION ListFieldDeleted( aList )
+
+ STATIC aListFieldDelete
+
+  IF !EMPTY(aList)
+     aListFieldDelete := aList
+  ENDIF
+
+  RETURN aListFieldDelete
+
+
+/* default field to be used as deleted */
+FUNCTION ADODEFLDDELETED( cFieldName )
+ STATIC cDelName := "HBDELETED"
+
+  IF !EMPTY(cFieldName)
+     cDelName := cFieldName
+  ENDIF
+
+  RETURN cDelName
 
 
 FUNCTION ListIndex(aList) //ATTENTION ALL MUST BE UPPERCASE
@@ -5396,7 +5538,7 @@ FUNCTION ListUdfs(aList)
    RETURN aUdfs
 
  /* default values for adordd to use if not present in open or create */
-FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass,lGetThem )
+FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass, cClass, lGetThem )
  STATIC aDefaults := {}
 
    DEFAULT lGetThem TO .T. //DEFAULT CALL WITHOUT PARAMS GET DEFAULT ARRAY
@@ -5408,6 +5550,7 @@ FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass,lGetThem )
       AADD(aDefaults, cEngine )
       AADD(aDefaults, cUser )
       AADD(aDefaults, cPass )
+      AADD(aDefaults, cClass )
       oConnection := ADOGETCONNECT(  cDB, cServer, cEngine, cUser, cPass  )
 
    ELSE
@@ -5424,7 +5567,7 @@ FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass,lGetThem )
 
 
 STATIC FUNCTION ADOGETCONNECT( cDB, cServer, cEngine, cUser, cPass  )
- LOCAL oCn := TOleAuto():New( "ADODB.Connection" )
+ LOCAL oCn := ADOCLASSNEW( "ADODB.Connection" )//TOleAuto():New( "ADODB.Connection" )
 
   TRY
 
@@ -5505,7 +5648,7 @@ STATIC FUNCTION TempRecordSet() //USED IN ADO_SEEK AVOID OVERTIME NEW OBJ RECORD
   STATIC oRs
 
   IF EMPTY(oRs)
-     oRs := TOleAuto():New( "ADODB.Recordset" )
+     oRs := ADOCLASSNEW( "ADODB.Recordset" )//TOleAuto():New( "ADODB.Recordset" )
   ENDIF
 
   RETURN oRs
@@ -5562,9 +5705,20 @@ FUNCTION ADOFORCELOCKS(lOn) //force lock control buy ado
   RETURN lLockScheme
 
 
+FUNCTION ADOVIRTUALDELETE(lOn) //Use Field to delete Records
+ STATIC lDeleteScheme := .F.
+
+  IF VALTYPE( lOn ) = "L"
+     lDeleteScheme := lOn
+
+  ENDIF
+
+  RETURN lDeleteScheme
+
+
 FUNCTION ADOVERSION()
 //version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.250915/1"
+RETURN "AdoRdd Version 1.081015/1"
 
 /*                   END ADO SET GET FUNCTONS */
 
