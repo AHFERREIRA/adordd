@@ -1,100 +1,17 @@
 
 //2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
+//check 01_readme before using adordd
 
  FUNCTION Main()
  LOCAL cSql :=""
 
-  RddRegister("ADORDD",1)
-  RddSetDefault("ADORDD")
+    RddRegister("ADORDD",1)
+    RddSetDefault("ADORDD")
 
-
-    /*                                             NOTES
-
-    SET ADO TABLES INDEX LIST TO = indexes without of any clipper like expression only to be used by SQL
-
-    SET ADODBF TABLES INDEX LIST TO = indexes with the clipper like expressions needed by the app for its evaluations.
-
-    When we use &(indexkey(0)) we cant evaluate a index expression in ADO TABLES "name+dDate+nValue" we will get an error but we can issues a sql select like that.
-    Thus we need the ADODBF expression "name+DTOS(dDate)+STR(nValue) to do it.
-
-    The ADO indexes are for queries the ADODBF are for the normal clipper expressions to allow its evaluation.
-
-        ARRAY SPEC FOR BOTH CASES:
-        ATTENTION ALL MUST BE UPPERCASE
-        { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
-
-    temporary index names
-    temporary indexes are not included here they are create on fly and added to temindex list array
-    they are only valid through the duration of the application
-    the temp index name is auto given by adordd
-
-    SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
-
-    each table autoinc field used as recno
-
-    SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
-
-    default table autoinc field used as recno
-
-    SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
-
-    SET AUTOPEN ON //might be OFF if you wish
-    SET AUTORDER TO 1 // first index opened can be other
-
-    set default parameters to adordd if you do not USE COMMAND or dont pretend to include this info
-    set it here
-
-    SET ADO DEFAULT DATABASE TO "test2.mdb" SERVER TO "ACCESS" ENGINE TO "ACESS" ;
-       USER TO "" PASSWORD TO ""
-
-    SET DBF TABLE TCONTROL ALL LOCKING RECORD AND TABLE IN ADORDD
-
-    DEFAULTS TO PATH WHERE APP IS RUNING
-    SET ADO LOCK CONTROL SHAREPATH TO  "C:" RDD TO "DBFCDX"
-    DISABLE CONTOL LOCK
-    SET ADO FORCE LOCK OFF /ON
-
-/*               THE ONLY CHANGES IN YOUR APP CODE END HERE! (SHOULD)              */
-
-
-/*                                T R I A L S
-   PEASE READ THIS CAREFULLY!
-
-   PLEASE REMEMBER THAT ALTHOUGH ADORDD STILL AND MIGHT WORK WITHOUT ANY AUTOINC FIELD AS RECNO
-   RESULT WILL BE UNPREDICTABLE IN SOME CIRCUNSTANCES OR ERROR MIGHT OCCOUR.
-   THE FINAL RELEASE WIL NOT WORK WITHOUT SUCH A FIELD
-
-   INDEXES WITH DATES IN SOME BROWSE WITHIN A DATE SCOPE RECORD MOVEMENT HAS STILL SOME PROBLEMS
-
-   WHEN YOU DELETE A RECORD YOU CANT ACCESS IT ANYMORE. THUS CODE LIKE THIS IS ILLEGAL:
-
-   DELETE RECORD
-   BLANKREC
-
-   THIS MUST BE CHANGED TO
-
-   IF RDDNAME() = "ADORDD"
-      BLANKREC
-      DELETE RECORD
-   ELSE
-      DELETE RECORD
-      BLANKREC
-   ENDIF
-
-   YOU CAN OPEN A TABLE ALSO WITH ANEW CONNECTION
-   USE "CTABLE@ CON SRING" ALIAS "TABLE"
-
-   ANY INDEX FUNCTION OR VARIABLES MUST BE EVALUAED BEFORE SENT TO ADO
-
-   BESIDES THESE CHANGES APP SHOULD RUN WITHOUT ANY CODE LOGIC CHANGE
-
-
-   PLEASE REPORT ANY BUGS! THANKS!   */
-
-    SET ADO TABLES INDEX LIST TO { {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
-    SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
+    //ony needed for tables with diferent from the default
+    //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
     SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
     SET AUTOPEN ON //might be OFF if you wish
     SET AUTORDER TO 1 // first index opened can be other
@@ -104,6 +21,8 @@
 
     //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
     SET ADO LOCK CONTROL SHAREPATH TO  "D:\WHATEVER" RDD TO "DBFCDX"
+
+    SET ADO DEFAULT DELETED FIELD TO "HBDELETED" /* defining the default name for DELETED field*/
 
    IF !FILE(   "\test2.mdb"   )
       //need to include complete path defaults to SET ADO DEFAULT DATABA
