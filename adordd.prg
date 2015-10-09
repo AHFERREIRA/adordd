@@ -199,7 +199,6 @@ STATIC FUNCTION ADO_NEW( nWA )
 
    USRRDD_AREADATA( nWA, aWAData )
 
-
    RETURN HB_SUCCESS
 
 
@@ -1771,6 +1770,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                      CASE aStruct[2] = "N"
                           xValue := CVALTOCHAR( xValue )
                      OTHERWISE
+                          xValue := STRTRAN( xValue, "'", "''" )
                           xValue := "'"+xValue+"'"
                    ENDCASE
 
@@ -3793,16 +3793,19 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
       IF !EMPTY( oRecordSet:Filter )
          IF lSoftSeek
             nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                     {|x|  SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey  } )
+                     {|x|  IF( VALTYPE( x[ 2 ] )= "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                                x[ 2 ] = cKey   )} )
 
             IF oRs:Eof() //!lFindLast
                nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                     {|x|  SUBSTR( x[ 2 ], 1, LEN( cKey ) ) > cKey  } )
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) > cKey ,;
+                                x[ 2 ] > cKey   )} )
 
             ELSE
                IF lFindLast
-                  nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                         {|x|  SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey  } )
+                  nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                         {|x|   x[ 2 ] = cKey  } )
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                                x[ 2 ] = cKey   )} )
 
                ENDIF
 
@@ -3810,11 +3813,13 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
 
          ELSE
             IF !lFindLast
-               nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                      {|x| SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey  } )
+               nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                        {|x|   x[ 2 ] = cKey  } )
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                                x[ 2 ] = cKey   )} )
             ELSE
-               nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                     {|x|  SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey  } )
+               nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                     {|x|   x[ 2 ] = cKey  } )
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                                x[ 2 ] = cKey   )} )
 
             ENDIF
 
