@@ -1,6 +1,11 @@
 
 //2015 AHF - Antonio H. Ferreira <disal.antonio.ferreira@gmail.com>
-//check 01_readme before using adordd
+//check 01_readme.pdf before using adordd
+//any application should work by setting these SETS and
+//uploading tables
+
+//ATTENTION BESIDES ACCESS ADORDD DOESNT CREATE THE DATABASE
+
 
  FUNCTION Main()
  LOCAL cSql :=""
@@ -8,37 +13,69 @@
     RddRegister("ADORDD",1)
     RddSetDefault("ADORDD")
 
+    //index related sets
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
-    //ony needed for tables with diferent from the default
-    //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","HBRECNO"},{"TABLE2","HBRECNO"}}
+    //these should be considered as UDF as they must either be evaluated in clipper way or
+    //change the value of the uderlying data
+    SET ADO INDEX UDFS TO {"IF","&","SUBSTR","=="}
+
+    //field recno and deleted related sets
     SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+    //only needed for tables with diferent from the default
+    //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","????"},{"TABLE2","????"}}
+    SET ADO DEFAULT DELETED FIELD TO "HBDELETE"
+    //only needed for tables with diferent from the default
+    //SET ADO FIELDDELETED TABLES LIST TO {{"TABLE1","?????"},{"TABLE2","???"} }
+
+    //LOCK RELATED SETS
+    //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
+    //uncomenet a place folder if lock set on
+    //SET ADO LOCK CONTROL SHAREPATH TO  "C:\TEMP" RDD TO "DBFCDX"
+    SET ADO FORCE LOCK OFF
+
+    //TABLE NAMES RELATED SETS
+    //table names with or without path ex. cpath_tablename or tbalename
+    //tables must be created or imported with the same set
+    SET ADO TABLENAME WITH PATH OFF
+    //if this set is on we need a path
+    //SET PATH TO "C:\WHATEVER"
+
+    //COnNECTION RELATED SETS
+    //need to include complete path
+    SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TESTADORDD.MDB" SERVER TO "ACESS" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
+
+
     SET AUTOPEN ON //might be OFF if you wish
     SET AUTORDER TO 1 // first index opened can be other
 
-    //need to include complete path
-    SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TEST2.mdb" SERVER TO "CSEVER" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
+/*
+IF YOU WANT TO TEST IT WITH YOUR OWN TABLES COMMENT THE CODE BELOW AND DO:
 
-    //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
-    SET ADO LOCK CONTROL SHAREPATH TO  "D:\WHATEVER" RDD TO "DBFCDX"
+ hb_AdoUpload( "YOUR DRIVE WITH PATH FINISHING WITH \", "DBFCDX", "ACCESS OR MYSQL OR OTHER", oOverWrite .F. )
 
-    SET ADO DEFAULT DELETED FIELD TO "HBDELETED" /* defining the default name for DELETED field*/
+AND WRITE YOUR OWN TESTING ROUTINES
+*/
 
-   IF !FILE(   "\test2.mdb"   )
+//THIS IS AN IDEA IT HAS NOT BEEN TESTED BUT IT SHOULD WORK
+
+   IF !FILE(   "\TESTADORDD.mdb"   )
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate("table1;\test2.mdb", ;
-                                { { "CODID",   "C", 10, 0 },;
-                                  { "FIRST",   "C", 30, 0 },;
-                                  { "LAST",    "C", 30, 0 },;
-                                  { "AGE",     "N",  8, 0 },;
-                                  { "HBRECNO", "+", 10, 0  } }, "ADORDD" )
+      DbCreate("table1;\TESTADORDD.mdb", ;
+                                { { "CODID",   "C", 10, 0  },;
+                                  { "FIRST",   "C", 30, 0  },;
+                                  { "LAST",    "C", 30, 0  },;
+                                  { "AGE",     "N",  8, 0  },;
+                                  { "HBRECNO", "+", 11, 0  } ,;
+                                  { "HBDELETE",  "L", 1,0  } }, "ADORDD" )
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "table2;\test2.mdb", ;
+      DbCreate( "table2;\TESTADORDD.mdb", ;
                                 { { "CODID",    "C", 10, 0 },;
                                   { "ADDRESS",  "C", 30, 0 },;
                                   { "PHONE",    "C", 30, 0 },;
                                   { "EMAIL",    "C", 100,0 },;
-                                  { "HBRECNO",  "+", 10,0  } }, "ADORDD" )
+                                  { "HBRECNO",  "+", 11,0  },;
+                                  { "HBDELETE",  "L", 1,0  }}, "ADORDD" )
 
      SELE 0
      USE table1 ALIAS "TEST1"
