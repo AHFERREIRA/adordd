@@ -196,6 +196,19 @@
 #define adCmdFile                       256
 #define adCmdTableDirect                512
 
+/* Execute type */
+#define adAsyncExecute                  16  /* Indicates that the command should execute asynchronously.This value cannot be combined with the CommandTypeEnum value adCmdTableDirect.*/
+#define adAsyncFetch                    32  /* Indicates that the remaining rows after the initial quantity specified in the CacheSize property should be retrieved asynchronously.*/
+#define adAsyncFetchNonBlocking         64  /* Indicates that the main thread never blocks while retrieving. If the requested row has not been retrieved, the current row automatically moves to the end of the file.*/
+                                            /* If you open a Recordset from a Stream containing a persistently stored Recordset, adAsyncFetchNonBlocking will not have an effect; the operation will be synchronous and blocking.*/
+                                            /* adAsynchFetchNonBlocking has no effect when the adCmdTableDirect option is used to open the Recordset.*/
+#define adExecuteNoRecords              128 /* Indicates that the command text is a command or stored procedure that does not return rows (for example, a command that only inserts data). If any rows are retrieved, they are discarded and not returned. */
+                                            /*adExecuteNoRecords can only be passed as an optional parameter to the Command or Connection Execute method.*/
+#define adExecuteStream                 256 /* Indicates that the results of a command execution should be returned as a stream.*/
+                                            /*adExecuteStream can only be passed as an optional parameter to the Command Execute method.*/
+#define adExecuteRecord                 512 /*Indicates that the CommandText is a command or stored procedure that returns a single row which should be returned as a Record object.*/
+#define adOptionUnspecified             -1  /* Indicates that the command is unspecified.*/
+
 /* Editmodes type */
 #define adEditNone                      0  /* Indicates that no editing operation is in progress.*/
 #define adEditInProgress                1 /*Indicates that data in the current record has been modified but not saved.*/
@@ -235,20 +248,9 @@
 //YOU CAN ALSO USE CTABLE@CON STRING
 #command USE <(db)> [VIA <rdd>] [ALIAS <a>] [<nw: NEW>] ;
             [<ex: EXCLUSIVE>] [<sh: SHARED>] [<ro: READONLY>] ;
-             [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
-            [ FROM DATABASE <dbtd> ] ;
-            [ <dbEngine: ACCESS, MYSQL, ORACLE, INFORMIX, MSSQL, FIREBIRD, POSTGRE, ANYWHERE, DBASE, SQLITE, FOXPRO, ADS>];
-            [ FROM SERVER <cServer> ] ;
-            [ SELECT <cQuery> ] ;
-            [ WHERE <cWhere> ] ;
-            [ GROUP BY <cGroup> ] ;
-            [ HAVING <cHaving> ] ;
-            [ USER <cUser> PASSWORD <cPassword> ] => ;
-         [ hb_adoSetDSource( <dbtd> ) ; ] ;
-         [ hb_adoSetEngine( <(dbEngine)> ) ; ] ;
-         [ hb_adoSetServer( <cServer> ) ; ] ;
-         [ hb_adoSetQuery( <cQuery>, <cWhere>, <cGroup>, <cHaving> ) ; ] ;
-         [ hb_adoSetUser( <cUser> ) ; hb_adoSetPassword( <cPassword> ) ; ] ;
+            [CODEPAGE <cp>] [INDEX <(index1)> [, <(indexN)>]] ;
+            [ WHERE <cQuery> ]  =>;
+         [ hb_adoSetQuery( <cQuery> ) ; ] ;
          dbUseArea( <.nw.>, <rdd>, <(db)>, <(a)>, ;
                     iif( <.sh.> .OR. <.ex.>, ! <.ex.>, NIL ), <.ro.> , [<cp>] ) ;
          [; dbSetIndex( <(index1)> )] ;
@@ -269,4 +271,5 @@
 #command SET ADO DEFAULT DELETED FIELD TO <cname>  => ADODEFLDDELETED( <cname> ) /* defining the default name for DELETED field*/
 #command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
 #command SET ADO TABLENAME WITH PATH <x:ON,OFF> => ADOTABLEWITHPATH( Upper( <(x)> ) == "ON" ) /* table name = path_tablename instead of only tablename */
+#command SET ADO CACHESIZE TO <nCache> ASYNC <x:ON,OFF> ASYNCNOWAIT <y:ON,OFF> => ADOPARAMETERS( <nCache>, Upper( <(x)> ) == "ON", Upper( <(y)> ) == "ON" )
 #endif
