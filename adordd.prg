@@ -154,6 +154,9 @@ STATIC t_cUserName
 STATIC t_cPassword
 STATIC t_cQuery
 STATIC oConnection
+STATIC t_lAsync
+STATIC t_lAsyncNoWait
+STATIC t_nCacheSize
 
 
 STATIC FUNCTION ADO_INIT( nRDD )
@@ -161,6 +164,13 @@ STATIC FUNCTION ADO_INIT( nRDD )
    LOCAL aRData := Array( RDD_SIZE )
 
    USRRDD_RDDDATA( nRDD, aRData )
+
+   RETURN HB_SUCCESS
+
+
+STATIC FUNCTION ADO_EXIT( nRDD )
+
+   ADODB_CLOSE()
 
    RETURN HB_SUCCESS
 
@@ -294,20 +304,20 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 
    ENDIF
 
-   //PROPERIES AFFECTING PERFORMANCE TRY
-   oRecordSet:CacheSize := 30 //records increase performance set zero returns error set great server parameters max open rows error
-/*  TRIALS persistent sets
-   IF FILE( SET( _SET_PATH )+"\"+aWAData[WA_TABLEINDEX] )
-      oRecordSet:Open( SET( _SET_PATH )+"\"+aWAData[WA_TABLEINDEX])//, aWAData[ WA_CONNECTION ] )
-   ELSE */
-   IF aWAData[ WA_QUERY ] == "SELECT * FROM " .AND. !"WHERE" $aWAData[ WA_QUERY ] //10.08.15 ORDER BY RECNO
-      oRecordSet:Open( aWAData[ WA_QUERY ] + aWAData[ WA_TABLENAME ]+" ORDER BY "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] ), aWAData[ WA_CONNECTION ])
+   //PROPERIES AFFECTING PERFORMANCE TRY defaults
+   t_lAsync := IF( EMPTY( t_lAsync ), .F., t_lAsync )
+   t_lAsyncNoWait := IF( EMPTY( t_lAsyncNoWait ), .F., t_lAsyncNoWait )
+   t_nCacheSize  := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
 
-   ELSE
-      oRecordSet:Open( aWAData[ WA_QUERY ], aWAData[ WA_CONNECTION ] )
+   oRecordSet:CacheSize :=  t_nCacheSize //records increase performance set zero returns error set great server parameters max open rows error
 
-   ENDIF
-   //ENDIF
+   oRecordSet:Open( "SELECT * FROM " + aWAData[ WA_TABLENAME ] + aWAData[ WA_QUERY ]+;
+             " ORDER BY "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] ), aWAData[ WA_CONNECTION ]  ;
+             , adOpenDynamic, adLockOptimistic, adCmdText+;
+             IF( t_lAsync .AND. t_lAsyncNoWait, adAsyncFetchNonBlocking, ;
+             IF( t_lAsync, adAsyncFetch, adOptionUnspecified ) ) )
+
+
    aWAData[ WA_RECORDSET ] := oRecordSet
    aWAData[ WA_BOF ] := aWAData[ WA_EOF ] := .F.
 
@@ -329,7 +339,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       //FROM _DBAPP DONT KNOW WHY BUT FIELD TYPE ALWAYS = N
       IF ALLTRIM( oRecordSet:Fields( n - 1 ):Name ) == ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] ) ;
         .AND. ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "+" .OR. ;
-        ( ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "N" .AND. PROCNAME( 1 ) == "__DBAPP" )
+        ( ADO_FIELDSTRUCT( oRecordSet, n-1 )[2] = "N" .AND.  PROCNAME( 1 ) == "__DBAPP" )
 
          aWAData[WA_FIELDRECNO]:=  n - 1
          //IF IT SUPPORTS SEEK WE WILL SEEK IT ISNTEAD OF FIND IT
@@ -469,6 +479,7 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
 
 // 23.06.15 OPEN THE CONNECTION TO ADOGETCONNECT AND ADOCONNECT
 STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
+ LOCAL oCatalog
 
   oCn:ConnectionTimeOut := 60 //26.5.15 28800 //24.5.15 added by lucas de beltran
 
@@ -489,8 +500,10 @@ STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
 
           IF Empty( cPass )
              oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  )
+
            ELSE
               oCn:Open( "Provider=Microsoft.Jet.OLEDB.4.0;Data Source=" + cDB  + ";Jet OLEDB:Database Password=" + AllTrim( cPass ) )
+
            ENDIF
 
      CASE cEngine = "ADS"
@@ -564,6 +577,13 @@ FUNCTION ADODB_CLOSE()
  //this is to enable transactions in several recordsets because transactions is per connection
  //this it to be called within an exit proc of the application
  // or whnever we dont need it anymore.
+ LOCAL n
+
+   FOR n := 1 to 255
+       IF !EMPTY( ALIAS( n ) ) .AND. ( n )->( RDDNAME(  ) ) = "ADORDD"
+          ADO_CLOSE( n )
+       ENDIF
+   NEXT
 
    IF ! Empty( oConnection )
       IF oConnection:State != adStateClosed
@@ -588,8 +608,6 @@ STATIC FUNCTION ADO_CLOSE( nWA )
    ADO_UNLOCK( nWA ) //RELEASE ALL LOCKS IN TLOCKS.DBF
 
    ADO_OPENSHARED( nWA, aWAData[WA_TABLENAME], .F., .T. )
-
-   //TRIALS PERSISTENT SETS oRecordSet:Save(  SET( _SET_PATH )+"\"+aWAData[WA_TABLEINDEX],1)
 
    //dont close connection as mugh be used by other recorsets
    // need to have all recordsets in same connection to use transactions
@@ -1903,7 +1921,7 @@ STATIC FUNCTION ADO_FIELDNAME( nWA, nField, cFieldName )
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
 
    IF nField < 1 .OR. nField > FCOUNT()
-      xValue := ""
+      cFieldName := ""
       RETURN HB_FAILURE
    ENDIF
 
@@ -1919,7 +1937,7 @@ STATIC FUNCTION ADO_FIELDINFO( nWA, nField, nInfoType, uInfo )
    LOCAL aFieldInfo
 
    IF nField < 1 .OR. nField > FCOUNT()
-      xValue := NIL
+      uInfo := NIL
       RETURN HB_FAILURE
    ENDIF
 
@@ -3782,7 +3800,7 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
 
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
    aWAData[ WA_EOF ] := oRecordSet:EOF
-
+   aWAData[ WA_LOCATEFOR ] := aWAData[ WA_SCOPEINFO ][ UR_SI_CFOR ]
 
    RETURN HB_SUCCESS
 
@@ -5020,6 +5038,7 @@ FUNCTION ADORDD_GETFUNCTABLE( pFuncCount, pFuncTable, pSuperTable, nRddID )
    LOCAL aADOFunc[ UR_METHODCOUNT ]
 
    aADOFunc[ UR_INIT ]         := (@ADO_INIT())
+   aADOFunc[ UR_EXIT ]         := (@ADO_EXIT())
    aADOFunc[ UR_INFO ]         := (@ADO_INFO())
    aADOFunc[ UR_NEW ]          := (@ADO_NEW())
    aADOFunc[ UR_CREATE ]       := (@ADO_CREATE())
@@ -5512,16 +5531,12 @@ PROCEDURE hb_adoSetPassword( cPassword )
 
 PROCEDURE hb_adoSetQuery( cQuery )
 
-   if( empty(cQuery), cQuery := "SELECT * FROM " ,cQuery)
+ //WE DONT USE GROUP BY BECAUSE RECORDSETS WITH THIS CALUSE
+ //DONT HAVE BOOKMARKS AND THUS NOT USABLE BY ADORDD.
+
+   if( empty(cQuery), cQuery := "" , cQuery :=" WHERE "+cQuery)
 
    t_cQuery := cQuery
-
-   RETURN
-
-
-PROCEDURE hb_adoSetLocateFor( cLocateFor )
-
-   USRRDD_AREADATA( Select() )[ WA_LOCATEFOR ] := cLocateFor
 
    RETURN
 
@@ -5719,13 +5734,9 @@ FUNCTION Hb_AdoRddDir( cPath )
 
 FUNCTION hb_AdoUpload( cBaseDir, cRDD, dbEngine, lOverWrite )
 #define F_NAME 1
-#define DBS_NAME 1
-#define DBS_TYPE 2
-#define DBS_LEN 3
-#define DBS_DEC 4
 #define F_ATTR 5
 
-   local aFiles, aStruct, aFile, cFile, oCn := hb_GetAdoConnection()
+   local  aFiles, aStruct, aFile, cFile, oCn := hb_GetAdoConnection()
 
    aFiles := directory( cBaseDir + "*.dbf" )
 
@@ -5749,12 +5760,11 @@ FUNCTION hb_AdoUpload( cBaseDir, cRDD, dbEngine, lOverWrite )
    For each aFile in aFiles
       if left( aFile[ F_NAME ], 1 ) != "." .and. "D" $ aFile[ F_ATTR ]
          cFile := cBaseDir + aFile[ F_NAME ] + HB_OsPathSeparator()
-         waiton( "   Subdir......"+ cFile)
          hb_AdoUpload( cFile, cRdd, dbEngine, lOverWrite )
       endif
    Next
 
-Return
+Return NIL
 
 
 // field name bit to use as deleted per each table {{"CTABLE","CFIELDNAME"} }
@@ -5867,7 +5877,7 @@ FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass, cClass, lGetThem )
       oConnection := ADOGETCONNECT(  cDB, cServer, cEngine, cUser, cPass  )
 
    ELSE
-      DEFAULT t_cQuery TO "SELECT * FROM "
+      DEFAULT t_cQuery TO "" //"SELECT * FROM "
       DEFAULT t_cUserName TO aDefaults[4]
       DEFAULT t_cPassword TO aDefaults[5]
       DEFAULT t_cServer TO aDefaults[2]
@@ -5877,6 +5887,15 @@ FUNCTION ADODEFAULTS( cDB, cServer, cEngine, cUser, cPass, cClass, lGetThem )
    ENDIF
 
    RETURN aDefaults
+
+
+FUNCTION ADOPARAMETERS( nCache, lAsync, lAsyncNoWait )
+
+   t_lAsync := lAsync
+   t_lAsyncNoWait := lAsyncNoWait
+   t_nCacheSize  := nCache
+
+   RETURN NIL
 
 
 /* default field to be used as recno */
@@ -5960,8 +5979,7 @@ FUNCTION ADOTABLEWITHPATH( lOn ) //force table name with path = path_tablename
 
 
 FUNCTION ADOVERSION()
-//version string = nr of version . post date() / sequencial nr in the same post date
-RETURN "AdoRdd Version 1.141015/1"
+RETURN "AdoRdd Version 1.0 build 191015/1"
 
 /*                   END ADO SET GET FUNCTONS */
 
