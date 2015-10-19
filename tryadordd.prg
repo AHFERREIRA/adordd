@@ -45,6 +45,8 @@
     //need to include complete path
     SET ADO DEFAULT DATABASE TO "D:\WHATEVER\TESTADORDD.MDB" SERVER TO "ACESS" ENGINE TO ACCESS USER TO "" PASSWORD TO ""
 
+    // FOR BIG TABLES TRY DIFERENT OPTIONS
+    SET ADO CACHESIZE TO 50 ASYNC ON ASYNCNOWAIT ON
 
     SET AUTOPEN ON //might be OFF if you wish
     SET AUTORDER TO 1 // first index opened can be other
