@@ -795,7 +795,9 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 
    // 30.06.15
    IF aAWData[ WA_ENGINE ] = "ACCESS" //6.08.15 ONLY WITH ACCESSIT TAKES LONGER IN BIG TABLES
-      cSql := "SELECT MAX("+(ADO_GET_FIELD_RECNO( aAWData[WA_TABLENAME] ))+") FROM "+aAWData[WA_TABLENAME]
+      cSql := "SELECT MAX("+(ADO_GET_FIELD_RECNO( aAWData[WA_TABLENAME] ))+")+1 FROM "+aAWData[WA_TABLENAME]
+   ELSEIF aAWData[ WA_ENGINE ] = "MSSQL"
+      cSql := "SELECT IDENT_CURRENT('"+aAWData[WA_TABLENAME]+"')+1 AS AUTO_INCREMENT"
    ELSE
       //30.06.15 REPLACED BY RAO NAGES IDEA next incremente key
       cSql := "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES"+;
@@ -818,54 +820,86 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
 
 
 STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
-   STATIC nSecs
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL nReccount := ADORECCOUNT( nWA, aWAData[ WA_RECORDSET ] )
    LOCAL nRecno, xKey, aSeek, oRs, cSql
-   LOCAL n, xExpression:=""
+   LOCAL n, xExpression:="", lOnlyfirstField := .T., oClone
 
-   IF nSecs <> NIL .AND. Seconds()-nSecs < 15
-      RETURN HB_SUCCESS
-
+   IF !ADOCON_CHECK()
+      RETURN HB_FAILURE
 
    ENDIF
 
    lRequery := IF( lRequery == NIL, .F., lRequery )
 
+   IF lRequery
+      aWAData[ WA_RECORDSET ]:Requery()
+      aWAData[ WA_RECCOUNT ] := nReccount
+      aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
+      RETURN HB_SUCCESS
+
+   ENDIF
+
    IF !aWAData[ WA_RECORDSET ]:Eof() .AND.!aWAData[ WA_RECORDSET ]:bof()
       nRecno := aWAData[ WA_RECORDSET ]:Fields(aWAData[WA_FIELDRECNO]):Value
    ELSE
-      nSecs := Seconds()
       RETURN HB_SUCCESS
    ENDIF
 
    IF VALTYPE( aWAData[ WA_RECCOUNT ] ) == "U" //initialize
       aWAData[ WA_RECCOUNT ] := nReccount
-      nSecs := Seconds()
       RETURN HB_SUCCESS
 
    ELSE
       // NEW RECORDS ADDED BY OTHERS?
-      IF aWAData[ WA_RECCOUNT ] < nReccount .OR. lRequery //only new records
-         //BUT ONLY IF NEW RECORDS ARE RELATED WITH OUR INDEXKEY
+      IF aWAData[ WA_RECCOUNT ] < nReccount //only new records
+         //LETS TRY TO CHECK ONLY IF NEW RECORDS ARE RELATED WITH OUR INDEXKEY
          IF aWAData[ WA_INDEXACTIVE ] > 0
-            aSeek := ADOPseudoSeek(nWA,xKey,aWAData)
-            cSql := IndexBuildExp(nWA,aWAData[WA_INDEXACTIVE],aWAData,.F.,IF(aSeek[3],aseek[1],aSeek[2] ) )
+            xKey := &( INDEXKEY( 0 ))
+            aSeek := ADOPseudoSeek(nWA, xKey, aWAData,,,,lOnlyfirstField)
+            cSql := "SELECT "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] )+;
+               " FROM "+aWAData[ WA_TABLENAME ]+" WHERE "+IF(aSeek[3],aseek[1],aSeek[2])+;
+               " ORDER BY "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] )
             oRs := TempRecordSet()
             oRs:CursorType :=   adOpenForwardOnly
             oRs:CursorLocation := adUseClient
             oRs:LockType := adLockReadOnly
             oRs:Open(cSql,aWAData[ WA_CONNECTION ] )
-            oRS:Sort := ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] )
 
             IF oRs:RecordCount > 0
-               oRs:MoveLast()
-               IF oRs:Fields( aWAData[WA_FIELDRECNO] ):Value > aWAData[ WA_RECCOUNT ] //new key
+               IF oRs:RecordCount < 500
+                  oClone := aWAData[ WA_RECORDSET ]
+                  //lets look at all app might have recycle routine deleed records
+                  DO WHILE !oRs:Eof()
+                     oClone:MoveFirst()
+                     oClone:Find( (oRs:Fields( 0 ):Name)+ " = '"+;
+                        ALLTRIM( STR(oRs:Fields( 0 ):Value, 11, 0) ) +"'" )
+
+                     IF oClone:Eof() //NEW RECORD!
+                        aWAData[ WA_RECORDSET ]:Requery()
+                        aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
+                        //re initialize
+                        aWAData[ WA_RECCOUNT ] := nReccount
+                        EXIT
+                     ENDIF
+                     oRs:MoveNext()
+
+                  ENDDO
+                  oClone := NIL
+
+               ELSE  // MORE THAN 500 TO SKIP MAYBE FAST TO DO IT ALL?
                   aWAData[ WA_RECORDSET ]:Requery()
                   aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
                   //re initialize
                   aWAData[ WA_RECCOUNT ] := nReccount
+
                ENDIF
+
+            ELSE  //THERE ARENT ANYMORE RECORDS WITH SAME INDEX KEY VALUE REFRRESH ALL
+               aWAData[ WA_RECORDSET ]:Requery()
+               aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
+               //re initialize
+               aWAData[ WA_RECCOUNT ] := nReccount
 
             ENDIF
 
@@ -875,6 +909,7 @@ STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
          ELSE  //NO INDEXES MUST BE A SMALL TABLE LETS REFESH IT ALL
             aWAData[ WA_RECORDSET ]:Requery()
             aWAData[ WA_RECCOUNT ] := nReccount
+            aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
 
          ENDIF
 
@@ -899,7 +934,12 @@ STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
 STATIC FUNCTION ADO_RESYNC( nWA, oRs ) //22.08.15
 
  LOCAL aWAData := USRRDD_AREADATA( nWA )
- LOCAL xKey := "", n, xExpression:="", nRecNo
+ LOCAL n, xExpression:="", nRecNo
+
+  IF !ADOCON_CHECK()
+     RETURN HB_FAILURE
+
+  ENDIF
 
    IF oRs:Bof() .OR. oRs:Eof() //nothing to do
       RETURN HB_SUCCESS
@@ -1174,6 +1214,7 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
    ELSE
       //MAYBE REFRESH THE SET AS IN CLIPPER SKIP 0
       //ENFORCE RELATIONS SHOULD BE BELOW AFTER MOVING TO NEXT RECORD
+      ADO_REFRESH( nWA ) //21.10.15 IS IT TO SLOW HERE
       IF ! Empty( aWAData[ WA_PENDINGREL ] )
          ADO_FORCEREL( nWA )
       ENDIF
@@ -1637,7 +1678,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 
       CATCH  //DELETED OR CHANGED RECORDS RECORDSET OUTDATED
          ADO_RECID(nWA, @nRecNo)
-         ADO_REFRESH( nWA, .T. )
+         ADO_RESYNC( nWA, rs )
          ADO_GOTO(nWa, nRecNo) //IF DELETED (not found) GOES EOF THEN TRYING TO LOCK IT WILL FAIL NO UPDATE POSSIBLE
 
          ADO_GETVALUE( nWA, nField, xValue )
@@ -1800,7 +1841,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                                 aWAData[ WA_ENGINE ] ) + " = " +;
                IF( VALTYPE( xValue )   <> "O", "'"+CVALTOCHAR( xValue )+"'", 'NULL' )+;
                    " WHERE " + ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
-                                                aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ) )
+                                                aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ),,adExecuteNoRecords  )
 
                //22.08.15
                //if we are in a diferent record of what we should ex was deleted by others
@@ -1843,7 +1884,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                        ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ),;
                        aWAData[ WA_ENGINE ] )  + " = " + xValue +" WHERE "+;
                        ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
-                                        aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 11, 0 ) ))
+                                        aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 11, 0 ) ),,adExecuteNoRecords )
 
                    //22.08.15
                    IF PROCNAME( 1 ) <> "__DBCOPY"
@@ -3153,8 +3194,7 @@ STATIC FUNCTION ADOINDEXFIELDS( nWA, cExpression, lDesc )
     IF ! EMPTY( aUdfs )
        FOR n := 1 TO LEN( aUdfs )
            IF AT( aUdfs[ n ], cExpression ) > 0
-              RETURN cStr
-              EXIT
+              RETURN cExpression
 
            ENDIF
 
@@ -3783,7 +3823,9 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
 
    ENDIF
 
+   #ifdef _FIVEWIN_CH
    CURSORWAIT()
+   #endif
 
    DO WHILE !aWAData[ WA_EOF ]
       IF EVAL( aWAData[ WA_SCOPEINFO ][ UR_SI_BFOR ])
@@ -3792,11 +3834,16 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
       ENDIF
 
       ADO_SKIPRAW( nWa, 1 )
+
+      #ifdef _FIVEWIN_CH
       SYSREFRESH()
+      #endif
 
    ENDDO
 
+   #ifdef _FIVEWIN_CH
    CURSORARROW()
+   #endif
 
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
    aWAData[ WA_EOF ] := oRecordSet:EOF
@@ -3985,7 +4032,7 @@ STATIC FUNCTION ADO_FOUND( nWA, lFound )
 
 
 //build selects expression for find scopes and seeks
-STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
+STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom, lOnlyfirstField)
 
  LOCAL nOrder := aWAData[WA_INDEXACTIVE]
  LOCAL cExpression := aWAData[WA_INDEXEXP][nOrder]
@@ -3994,6 +4041,7 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
 
  DEFAULT lSoftSeek TO .F.//to use like insead of =
  DEFAULT lBetween TO .F.
+ DEFAULT lOnlyFirstField to .F.
 
  cKey := CVALTOCHAR(cKey)
  cKeybottom := CVALTOCHAR(cKeybottom)
@@ -4003,6 +4051,7 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
 
        IF nAt > 0
           AADD(aFields ,{ALLTRIM((nWA)->(FIELDNAME(n))),nAt}) //nAt order of the field in the expression
+
        ENDIF
 
     NEXT
@@ -4022,34 +4071,36 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
            IF !lBetween
               IF !lSoftSeek
                  cExpression += aFields[nAt,1]+ "="+"'"+SUBSTR( cKey, 1, nLen)+"'"
-                 cSqlExpression := cExpression
+                 cSqlExpression += ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+ "="+"'"+SUBSTR( cKey, 1, nLen)+"'"
               ELSE
                  cExpression += aFields[nAt,1]+" = "+"'"+SUBSTR( cKey, 1, nLen)+"'"
                  //cSqlExpression := cExpression
-                 cSqlExpression += SUBSTR( cKey, 1, nLen)
+                 cSqlExpression += ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+" = "+"'"+SUBSTR( cKey, 1, nLen)+"'"
 
                  IF nAt > 1
-                    cFields += "+"+aFields[nAt,1]
+                    cFields += "+"+ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )
                  ELSE
-                    cFields += aFields[nAt,1]
+                    cFields += ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )
                  ENDIF
               ENDIF
 
            ELSE
               cExpression += aFields[nAt,1]+" BETWEEN "+"'"+SUBSTR( cKey, 1, nLen)+"'"+;
                             " AND "+"'"+SUBSTR( cKeyBottom, 1, nLen)+"'"
-              cSqlExpression := cExpression
+              cSqlExpression := ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+" BETWEEN "+"'"+SUBSTR( cKey, 1, nLen)+"'"+;
+                            " AND "+"'"+SUBSTR( cKeyBottom, 1, nLen)+"'"
            ENDIF
 
         ELSEIF cType = "D" .OR. cType = "N" .OR. cType = "I" .OR. cType = "B"
            IF cType = "D"
               IF !lBetween
-                 cExpression    += aFields[nAt,1]+ "="+"#"+ADODTOS(SUBSTR( cKey, 1, nLen))+"#" //delim might be #
-                 cSqlExpression += aFields[nAt,1]+ "='"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'"
+                 cExpression    += aFields[nAt,1]+ "="+ADODTOS(SUBSTR( cKey, 1, nLen), aWAData[ WA_ENGINE ])+"" //delim might be #
+                 cSqlExpression += ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+ "="+ADODTOS(SUBSTR( cKey, 1, nLen),aWAData[ WA_ENGINE ])+""
               ELSE
-                 cExpression += aFields[nAt,1]+" BETWEEN "+"'"+ADODTOS(SUBSTR( cKey, 1, nLen))+"'"+;
-                           " AND "+"'"+ADODTOS(SUBSTR( cKeyBottom, 1, nLen))+"'"
-                 cSqlExpression := cExpression
+                 cExpression += aFields[nAt,1]+" BETWEEN "+""+ADODTOS(SUBSTR( cKey, 1, nLen),aWAData[ WA_ENGINE ])+""+;
+                           " AND "+""+ADODTOS(SUBSTR( cKeyBottom, 1, nLen),aWAData[ WA_ENGINE ])+""
+                 cSqlExpression := ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+" BETWEEN "+""+ADODTOS(SUBSTR( cKey, 1, nLen),aWAData[ WA_ENGINE ])+""+;
+                           " AND "+""+ADODTOS(SUBSTR( cKeyBottom, 1, nLen),aWAData[ WA_ENGINE ])+""
               ENDIF
 
            ELSE
@@ -4057,7 +4108,7 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
 
               IF !lBetween
                  cExpression    += aFields[nAt,1]+ "="+cVal
-                 cSqlExpression += aFields[nAt,1]+ "="+cVal
+                 cSqlExpression += ADOQUOTEDCOLSQL( aFields[nAt,1], aWAData[ WA_ENGINE ] )+ "="+cVal
               ELSE
                  cExpression += aFields[nAt,1]+" BETWEEN "+cVal+;
                           " AND "+cVal
@@ -4089,6 +4140,10 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom)
         IF LBetween
            cKeybottom := SUBSTR(cKeybottom,nLen+1) // take out the len of the expression already used
 
+        ENDIF
+
+        IF lOnlyFirstField
+           EXIT
         ENDIF
 
         IF nAt < LEN(aFields) //add AND last one isnt needed!
@@ -4639,7 +4694,7 @@ STATIC FUNCTION ADOQUOTEDCOLSQL( cCol, dbEngine)
   DO CASE
 
      CASE dbEngine = "ACCESS"
-          cCol     := '`' + cCol + '`'
+          cCol     := '[' + cCol + ']'
      CASE dbEngine = "MSSQL"
 
      CASE dbEngine = "DBASE"
@@ -4649,7 +4704,7 @@ STATIC FUNCTION ADOQUOTEDCOLSQL( cCol, dbEngine)
           cCol     := '"' + cCol + '"'
 
      CASE dbEngine = "MYSQL"
-          cCol = "`" + cCol + "`"
+          cCol := "`" + cCol + "`"
 
      CASE dbEngine = "FOXPRO"
           cCol     := '`' + cCol + '`'
@@ -5105,7 +5160,7 @@ INIT PROCEDURE ADORDD_INIT()
    RETURN
 
 
-STATIC FUNCTION ADODTOS(cDate)
+STATIC FUNCTION ADODTOS(cDate, dbengine)
  LOCAL cYear,cMonth,cDay,dDate
 
 
@@ -5131,6 +5186,12 @@ STATIC FUNCTION ADODTOS(cDate)
    IF( EMPTY(cDay),cDay := "01",cDay)
 
    cDate  := cYear+"-"+cMonth+"-"+cDay // hope to enforce set date format like this
+
+   IF dbengine = "ACCESS"
+      cDate := "#"+cDate+"#"
+   ELSEIF dbengine <> NIL
+      cDate := "'"+cDate+"'"
+   ENDIF
 
    RETURN cDate
 
@@ -5979,7 +6040,7 @@ FUNCTION ADOTABLEWITHPATH( lOn ) //force table name with path = path_tablename
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 build 191015/1"
+RETURN "AdoRdd Version 1.0 build 211015"
 
 /*                   END ADO SET GET FUNCTONS */
 
