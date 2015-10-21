@@ -61,23 +61,27 @@ AND WRITE YOUR OWN TESTING ROUTINES
 
 //THIS IS AN IDEA IT HAS NOT BEEN TESTED BUT IT SHOULD WORK
 
-   IF !FILE(   "\TESTADORDD.mdb"   )
+   IF !hb_adoRddExistsTable( ,"table1")
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate("table1;\TESTADORDD.mdb", ;
+      DbCreate("table1", ;
                                 { { "CODID",   "C", 10, 0  },;
                                   { "FIRST",   "C", 30, 0  },;
                                   { "LAST",    "C", 30, 0  },;
                                   { "AGE",     "N",  8, 0  },;
                                   { "HBRECNO", "+", 11, 0  } ,;
                                   { "HBDELETE",  "L", 1,0  } }, "ADORDD" )
+    ENDIF
+    IF !hb_adoRddExistsTable( ,"table2")
       //need to include complete path defaults to SET ADO DEFAULT DATABA
-      DbCreate( "table2;\TESTADORDD.mdb", ;
+      DbCreate( "table2", ;
                                 { { "CODID",    "C", 10, 0 },;
                                   { "ADDRESS",  "C", 30, 0 },;
                                   { "PHONE",    "C", 30, 0 },;
                                   { "EMAIL",    "C", 100,0 },;
                                   { "HBRECNO",  "+", 11,0  },;
                                   { "HBDELETE",  "L", 1,0  }}, "ADORDD" )
+
+    ENDIF
 
      SELE 0
      USE table1 ALIAS "TEST1"
