@@ -868,7 +868,7 @@ STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
 
             IF oRs:RecordCount > 0
                IF oRs:RecordCount < 500
-                  oClone := aWAData[ WA_RECORDSET ]
+                  oClone := aWAData[ WA_RECORDSET ]:Clone
                   //lets look at all app might have recycle routine deleed records
                   DO WHILE !oRs:Eof()
                      oClone:MoveFirst()
@@ -923,8 +923,6 @@ STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
          ENDIF
 
       ENDIF
-
-      nSecs := Seconds()
 
    ENDIF
 
@@ -1186,7 +1184,6 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
                   aWAData[ WA_EOF ] := oRecordSet:EOF
 
                ENDIF
-
 
             ELSEIF nToSkip < 0
                IF ! ADOSCOPEOK( nWA, 0 ) .OR. oRecordSet:Bof()
@@ -1759,7 +1756,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
    LOCAL nRecNo, aOrderInfo  := ARRAY(UR_ORI_SIZE),oError,cDateFormat
    //10.08.15
    LOCAL aStruct ,xBook
-   LOCAL aBookMarks := {}, bForExp, nPos
+   LOCAL aBookMarks := {}, bForExp, nPos, cValue
 
    IF !ADOCON_CHECK()
       RETURN HB_FAILURE
@@ -1854,7 +1851,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
             ELSE
                IF 1<>1 //PROCNAME( 1 ) = "__DBCOPY" //1<>1
                   //DEACTIVATED BECAUSE SOMETIMES IN A LOOP GIVES ERROR STATUS 2048
-                  //CONCURRENCY WITHOUT ANYONE ELSE ITH THIS ROW!
+                  //CONCURRENCY WITHOUT ANYONE ELSE WITH THIS ROW!
                   //aWAData[ WA_LOCKSCHEME ] //.OR. ;// 18.06.15 to work safely without locks
                   //PROCNAME( 1 ) = "__DBCOPY" //11.08.15 copy below errors dont know why
                   oRecordSet:Fields( nField - 1 ):Value := xValue
@@ -1869,28 +1866,38 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                   DO CASE
                      CASE aStruct[2] = "L"
                           IF( xValue, xValue := 1, xValue := 0 )
-                          xValue := CVALTOCHAR( xValue )
+                          cValue := CVALTOCHAR( xValue )
 
                      CASE aStruct[2] = "N"
-                          xValue := STR( xValue, FIELDLEN( nField ) , FIELDDEC( nField ) )
+                          cValue := STR( xValue, FIELDLEN( nField ) , FIELDDEC( nField ) )
 
                      OTHERWISE
-                          //cant do it with ncrypted strings !xValue := STRTRAN( xValue, "'", "''" )
-                          xValue := "'"+xValue+"'"
+                         cValue := '"'+xValue+'"'
 
                    ENDCASE
 
-                   aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
-                       ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ),;
-                       aWAData[ WA_ENGINE ] )  + " = " + xValue +" WHERE "+;
-                       ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
+                   TRY
+                       aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
+                          ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ),;
+                          aWAData[ WA_ENGINE ] )  + " = " + cValue +" WHERE "+;
+                          ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
                                         aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 11, 0 ) ),,adExecuteNoRecords )
 
-                   //22.08.15
-                   IF PROCNAME( 1 ) <> "__DBCOPY"
-                      ADO_RESYNC( nWA, oRecordSet )
-                   ENDIF
+                       //22.08.15
+                       IF PROCNAME( 1 ) <> "__DBCOPY"
+                          ADO_RESYNC( nWA, oRecordSet )
+                       ENDIF
 
+                   CATCH  //gets here with special chars in cvalue "' ETC
+                       oRecordSet:Fields( nField - 1 ):Value := xValue
+                       TRY
+                           oRecordSet:Update()
+                       CATCH
+                           ADOSTATUSMSG( oRecordSet:Status,oRecordSet:Fields( nField - 1 ):Name,;
+                                oRecordSet:Fields( nField - 1 ):Value, xValue, oRecordSet:LockType )
+                       END
+
+                   END
                ENDIF
 
             ENDIF
@@ -3823,10 +3830,6 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
 
    ENDIF
 
-   #ifdef _FIVEWIN_CH
-   CURSORWAIT()
-   #endif
-
    DO WHILE !aWAData[ WA_EOF ]
       IF EVAL( aWAData[ WA_SCOPEINFO ][ UR_SI_BFOR ])
          aWAData[ WA_FOUND ] := .T.
@@ -3835,15 +3838,7 @@ STATIC FUNCTION ADO_LOCATE( nWA, lContinue )
 
       ADO_SKIPRAW( nWa, 1 )
 
-      #ifdef _FIVEWIN_CH
-      SYSREFRESH()
-      #endif
-
    ENDDO
-
-   #ifdef _FIVEWIN_CH
-   CURSORARROW()
-   #endif
 
    aWAData[ WA_FOUND ] := ! oRecordSet:EOF
    aWAData[ WA_EOF ] := oRecordSet:EOF
@@ -4282,33 +4277,53 @@ STATIC FUNCTION ADO_RELEVAL( nWA, aRelInfo )
    RETURN nReturn
 
 
-STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
+STATIC FUNCTION ADO_DBEVAL( nWA, aEvalInfo )
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL aScopeInfo := aEvalInfo[ UR_EI_SCOPE ], uResult, n:=0, lDeleted
 
-   LOCAL nCurrArea
+   DEFAULT aScopeInfo[ UR_SI_BWHILE ] TO {||.T.}
+   DEFAULT aScopeInfo[ UR_SI_BFOR ] TO {||.T.}
+   DEFAULT aScopeInfo[ UR_SI_REST ] TO .F.
 
-
-   nCurrArea := Select()
-   IF nCurrArea != nArea
-      dbSelectArea( nArea )
-   ELSE
-      nCurrArea := 0
+   IF !aScopeInfo[ UR_SI_REST ]
+      ADO_GOTOP( nWA )
    ENDIF
 
-   IF PROCNAME(1) <> "ADO_RELEVAL"
-      // DONT KNOW WHY BUT DBEVAL ONLY WORK LIKE THIS
-      //uResult := Eval( bBlock )
-      UR_SUPER_EVALBLOCK( nArea, bBlock, @uResult )
+   IF !EMPTY( aScopeInfo[ UR_SI_NEXT ] )
+      n := aScopeInfo[ UR_SI_NEXT ]
+   ENDIF
+
+   IF !EMPTY( aScopeInfo[ UR_SI_RECORD ] )
+      ADO_GOTO( nWA, aScopeInfo[ UR_SI_RECORD ] )
+   ENDIF
+
+   DO WHILE EVAL( aScopeInfo[ UR_SI_BWHILE ] ) .AND. !aWAData[ WA_EOF ]
+      IF EVAL( aScopeInfo[ UR_SI_BFOR ] )
+         ADO_EVALBLOCK( nWA, aEvalInfo[ UR_EI_BLOCK ], @uResult )
+
+      ENDIF
+      DBSKIP()
+
+      n--
+      IF n = 0 .OR. !EMPTY( aScopeInfo[ UR_SI_RECORD ] )
+         EXIT
+
+      ENDIF
+
+   ENDDO
+
+   RETURN HB_SUCCESS
+
+
+STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
+
+   IF PROCNAME(1) == "ADO_RELEVAL"
+      uResult := (nArea)->(Eval( bBlock ))
 
    ELSE
       uResult := Eval( bBlock )
 
    ENDIF
-
-   IF nCurrArea > 0
-      dbSelectArea( nCurrArea )
-
-   ENDIF
-
 
    RETURN HB_SUCCESS
 
@@ -5145,6 +5160,7 @@ FUNCTION ADORDD_GETFUNCTABLE( pFuncCount, pFuncTable, pSuperTable, nRddID )
    aADOFunc[ UR_ORDLSTADD ]    := (@ADO_ORDLSTADD())
    aADOFunc[ UR_ORDLSTCLEAR ]  := (@ADO_ORDLSTCLEAR())
    aADOFunc[ UR_ORDLSTREBUILD ]:= (@ADO_ORDLSTREBUILD())
+   aADOFunc[ UR_DBEVAL ]       := (@ADO_DBEVAL())
    aADOFunc[ UR_EVALBLOCK ]    := (@ADO_EVALBLOCK())
    aADOFunc[ UR_SEEK ]         := (@ADO_SEEK())
    aADOFunc[ UR_TRANS ]        := (@ADO_TRANS())
@@ -5982,20 +5998,29 @@ FUNCTION ADODEFLDDELETED( cFieldName )
 
 //ceate table for record lock control
 FUNCTION ADOLOCKCONTROL(cPath,cRdd)
- STATIC cFile,rRdd
+ STATIC cFile,rRdd, cLockPath
 
  LOCAL cTable
  LOCAL cIndex
 
  FIELD CODLOCK
 
-  DEFAULT cRdd TO "DBFCDX"
-  DEFAULT cPath TO SUBSTR(ALLTRIM(cFilePath( GetModuleFileName( GetInstance() ) ) ),1,;
-                       LEN(ALLTRIM(cFilePath( GetModuleFileName( GetInstance() ) ) ))-1)
-  IF EMPTY(rRdd)
+  IF rRdd = NIL
      rRdd := cRdd
+  ENDIF
+  IF cLockPath = NIL
+     cLockPath := cPath
+  ENDIF
+
+  IF rRdd = NIL .OR. cLockPath = NIL
+     THROW( ErrorNew( "ADORDD", 10200, 10200, "Lock control ADO needs a share path and RDD to have it active " ) )
+
+  ELSEIF !ISDIRECTORY( cLockPath )
+     THROW( ErrorNew( "ADORDD", 10201, 10201, "Lock control share path does not exist" ) )
 
   ENDIF
+
+  cPath := cLockPath
 
   IF EMPTY(cFile)
      cFile := cPath+"\TLOCKS"
@@ -6018,7 +6043,7 @@ FUNCTION ADOLOCKCONTROL(cPath,cRdd)
 
 
 FUNCTION ADOFORCELOCKS(lOn) //force lock control buy ado
- STATIC lLockScheme := .T.
+ STATIC lLockScheme := .F.
 
   IF VALTYPE( lOn ) = "L"
      lLockScheme := lOn
@@ -6040,7 +6065,7 @@ FUNCTION ADOTABLEWITHPATH( lOn ) //force table name with path = path_tablename
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 build 211015"
+RETURN "AdoRdd Version 1.0 Build 251015"
 
 /*                   END ADO SET GET FUNCTONS */
 
@@ -6201,6 +6226,28 @@ function cFileDisc( cPathMask )  // returns drive of the path
 return If( At( ":", cPathMask ) == 2, ;
            Upper( Left( cPathMask, 2 ) ), "" )
 
+function cFileExt( cPathMask ) // returns the ext of a filename
+
+   local cExt := AllTrim( cFileNoPath( cPathMask ) )
+   local n    := RAt( ".", cExt )
+
+return AllTrim( If( n > 0 .and. Len( cExt ) > n,;
+                    Right( cExt, Len( cExt ) - n ), "" ) )
+
+function cGetNewAlias( cAlias ) // returns a new alias name for
+                                // an alias
+   local cNewAlias, nArea := 1
+
+   if Select( cAlias ) != 0
+      while Select( cNewAlias := ( cAlias + ;
+            StrZero( nArea++, 3 ) ) ) != 0
+      end
+   else
+      cNewAlias = cAlias
+   endif
+
+return cNewAlias
+
 #pragma BEGINDUMP
 #include <hbapi.h>
 
@@ -6212,4 +6259,5 @@ HB_FUNC( LAND )
 #pragma ENDDUMP
 
 #endif
+
 
