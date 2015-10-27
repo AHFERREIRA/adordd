@@ -794,7 +794,7 @@ STATIC FUNCTION ADORECCOUNT(nWA,oRecordSet) //AHF
    oRs:LockType       := adLockReadOnly
 
    // 30.06.15
-   IF aAWData[ WA_ENGINE ] = "ACCESS" //6.08.15 ONLY WITH ACCESSIT TAKES LONGER IN BIG TABLES
+   IF aAWData[ WA_ENGINE ] = "ACCESS" .OR. aAWData[ WA_ENGINE ] = "SQLITE"//6.08.15 ONLY WITH ACCESSIT TAKES LONGER IN BIG TABLES
       cSql := "SELECT MAX("+(ADO_GET_FIELD_RECNO( aAWData[WA_TABLENAME] ))+")+1 FROM "+aAWData[WA_TABLENAME]
    ELSEIF aAWData[ WA_ENGINE ] = "MSSQL"
       cSql := "SELECT IDENT_CURRENT('"+aAWData[WA_TABLENAME]+"')+1 AS AUTO_INCREMENT"
@@ -1251,6 +1251,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
    LOCAL aCols := {}, aVals := {}
    LOCAL lAdded   := .f.,nRecNo
    LOCAL aLockInfo := ARRAY( UR_LI_SIZE ),oError, aBookMarks := {},xBook
+   LOCAL nDecimals
 
     IF !ADOCON_CHECK()
        RETURN HB_FAILURE
@@ -1298,12 +1299,14 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 
           oRs:AddNew( aCols, aVals )
           oRs:Update()
-          IF  aWData[ WA_INDEXACTIVE ] > 0 .AND. LEN( aWData[ WA_ABOOKMARKS ] [ aWData[ WA_INDEXACTIVE ] ] ) > 0
+          IF  aWData[ WA_INDEXACTIVE ] > 0 .AND. !EMPTY( oRs:Filter )
               //WITH FOR CONDITION NO RECORDS ARE ADDED ONLY REMOVED IN ADO_PUTVALUE
               //WHEN FOR IS EVALUATED FALSE
               IF EMPTY ( aWData[WA_INDEXFOR][aWData[ WA_INDEXACTIVE ]] )
                  xBook := oRs:BookMark
+                 nDecimals := SET( _SET_DECIMALS, 0 )
                  AADD( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]] ,{oRs:BookMark ,&( INDEXKEY( 0 ) ) } )
+                 SET( _SET_DECIMALS, nDecimals  )
                  IF UPPER( SUBSTR( aWData[ WA_INDEXDESC ] [ aWData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
                     ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
                  ELSE
@@ -1316,6 +1319,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
                  oRs:Filter := aBookMarks
                  oRs:BookMark := xBook
               ENDIF
+
           ENDIF
 
           aWData[ WA_EOF ] := oRs:Eof()
@@ -1561,7 +1565,7 @@ STATIC FUNCTION ADO_ZAP( nWA )
 
       END
 
-      ADO_REFRESH( nWA, .T. )
+      oRecordSet:Requery()
 
    ENDIF
 
@@ -1591,7 +1595,7 @@ STATIC FUNCTION ADO_PACK( nWA )
   aWAData[ WA_CONNECTION ]:Execute( cSql )
 
   MEMOWRIT( "packsql.txt", cSql )
-  ADO_REFRESH( nWA, .T. )
+  oRecordSet:Requery()
 
   RETURN HB_SUCCESS
 /*                             END OF DELETE RECALL ZAP PACK              */
@@ -1902,7 +1906,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
             ENDIF
 
-            IF  aWAData[ WA_INDEXACTIVE ] > 0 .AND. LEN( aWAData[ WA_ABOOKMARKS ] [ aWAData[ WA_INDEXACTIVE ] ] ) > 0
+            IF  aWAData[ WA_INDEXACTIVE ] > 0 .AND. !EMPTY( oRecordSet:Filter )
                 xBook := oRecordSet:BookMark
                 nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
                               {|x|  x[ 1 ] = xBook  } )
@@ -1916,7 +1920,8 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                    // ONLY TO DO IF FIELD IN ORDER BY
                    IF ALLTRIM(oRecordSet:Fields( nField - 1 ):Name) $  INDEXKEY( 0 )
                       xBook := oRecordSet:BookMark
-                      aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]][ 2 ] := &( INDEXKEY( 0 ) )
+                      aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ],npos,2] := &( INDEXKEY( 0 ) )
+
                       IF UPPER( SUBSTR( aWAData[ WA_INDEXDESC ] [ aWAData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
                          ASORT( aWAData[ WA_ABOOKMARKS ][aWAData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
 
@@ -4579,6 +4584,10 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
                      cSql  += " PRIMARY KEY"
 
                   ENDIF
+                  IF dbEngine == "SQLITE"
+                     cSql  += " AUTOINCREMENT"
+
+                  ENDIF
 
              CASE aStruct[ nCol,2 ] = '='
                   cSql  += { "", " DATETIME NOT NULL DEFAULT Now()", " DATETIME NOT NULL DEFAULT (GetDate())", ;
@@ -4716,7 +4725,7 @@ STATIC FUNCTION ADOQUOTEDCOLSQL( cCol, dbEngine)
           cCol     := '[' + cCol + ']'
 
      CASE dbEngine = "SQLITE"
-          cCol     := '"' + cCol + '"'
+          cCol     := '`' + cCol + '`'
 
      CASE dbEngine = "MYSQL"
           cCol := "`" + cCol + "`"
@@ -6065,7 +6074,7 @@ FUNCTION ADOTABLEWITHPATH( lOn ) //force table name with path = path_tablename
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 251015"
+RETURN "AdoRdd Version 1.0 Build 271015"
 
 /*                   END ADO SET GET FUNCTONS */
 
