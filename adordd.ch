@@ -272,4 +272,5 @@
 #command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
 #command SET ADO TABLENAME WITH PATH <x:ON,OFF> => ADOTABLEWITHPATH( Upper( <(x)> ) == "ON" ) /* table name = path_tablename instead of only tablename */
 #command SET ADO CACHESIZE TO <nCache> ASYNC <x:ON,OFF> ASYNCNOWAIT <y:ON,OFF> => ADOPARAMETERS( <nCache>, Upper( <(x)> ) == "ON", Upper( <(y)> ) == "ON" )
+#command SET ADO PRE OPEN THRESHOLD TO <nRecords> => ADOPREOPENTHRESHOLD( <nRecords> )
 #endif
