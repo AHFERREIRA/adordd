@@ -93,10 +93,7 @@ ANNOUNCE ADORDD
 #include "common.ch"
 #include "dbstruct.ch"
 #include "dbinfo.ch"
-
-#ifndef __XHARBOUR__
 #include "hbcompat.ch"  //27.10.15 jose quintas advise
-#endif
 
 #include "hbusrrdd.ch"  //verify that your version has the array field size of 7 for xarbour at least for 2008 version
 
@@ -404,7 +401,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
 STATIC FUNCTION ADO_ALREADYOPEN( cTable, oRecordSet)
  LOCAL n, lRet := .F.
 
-   n := ASCAN( a_preopen, { | x |  x[ 1 ] == cTable  } )
+   n := ASCAN( a_preopen, { | x |  x[ 1 ] = cTable  } )
    IF n > 0
       oRecordSet := a_preopen[ n, 2 ]:Clone
       oRecordSet:Sort := a_preopen[ n, 2 ]:Sort
@@ -2325,7 +2322,7 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
 
    // IF ITS STRING CONVERT TO NUMVER
    IF VALTYPE(aOrderInfo[ UR_ORI_TAG ]) = "C"
-      n := ASCAN(aWAData[ WA_INDEXES ], aOrderInfo[ UR_ORI_TAG]  )
+      n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
 
       IF n > 0
          aOrderInfo[ UR_ORI_TAG ] := n
@@ -2405,7 +2402,7 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
            ENDIF
 
         ELSE
-            n := ASCAN(aWAData[ WA_INDEXES ],{ | x | x == aOrderInfo[ UR_ORI_TAG] })
+            n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
             IF n > 0
                aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][n]
             ELSE
@@ -2418,7 +2415,7 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
         IF VALTYPE(aOrderInfo[ UR_ORI_TAG ]) = "N"
            aOrderInfo[ UR_ORI_RESULT ] := aOrderInfo[ UR_ORI_TAG ]
         ELSE
-           n := ASCAN(aWAData[ WA_INDEXES ],{ | x | x == aOrderInfo[ UR_ORI_TAG] })
+           n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
            IF n > 0
               aOrderInfo[ UR_ORI_RESULT ] := n
            ELSE
@@ -2441,7 +2438,7 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
            ENDIF
 
         ELSE
-           n := ASCAN(aWAData[ WA_INDEXES ],{ | x | x == aOrderInfo[ UR_ORI_TAG] })
+           n := ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG])
            IF n > 0
               aOrderInfo[ UR_ORI_RESULT ] := aWAData[ WA_INDEXES ][n]
            ELSE
@@ -2718,7 +2715,7 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
          aOrderInfo[ UR_ORI_TAG ] := CFILENOPATH(aOrderInfo[UR_ORI_TAG])
          aOrderInfo[ UR_ORI_TAG ] := UPPER(CFILENOEXT(aOrderInfo[ UR_ORI_TAG ]))
 
-         n := ASCAN(aWAData[ WA_INDEXES ],{ | x | x == UPPER(aOrderInfo[ UR_ORI_TAG ]) } )
+         n := ASCAN(aWAData[ WA_INDEXES ],UPPER(aOrderInfo[ UR_ORI_TAG ]))
 
       ELSE
          n := aOrderInfo[ UR_ORI_TAG ]
@@ -2758,21 +2755,11 @@ STATIC FUNCTION ADO_ORDLSTFOCUS( nWA, aOrderInfo )
          IF ASCAN(aTempFiles,UPPER(SUBSTR(aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]],1,3)) ) > 0 .OR.;
             ASCAN(aTempFiles,UPPER(SUBSTR(aWAData[ WA_INDEXES ] [aWAData[ WA_INDEXACTIVE ]],1,4)) ) > 0
 
-            IF LEN( aWAData[ WA_ABOOKMARKS ][n] ) > 0
-               //ARRAY DATA WRKAREA ALREADY CREATEED WITH ORCREATE
-               oRecordSet:Sort := ""
-               aBookMarks := aWAData[ WA_ABOOKMARKS ][n]
-               aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
-               oRecordSet:Filter := aBookMarks
-
-            ELSE
-               oRecordSet:Filter := ""
-               cSql := IndexBuildExp(nWA,n,aWAData)
-               cSql := ALLTRIM( SUBSTR( cSql, AT( "ORDER BY", cSql )+9 ) )
-               cSql := cSql
-               oRecordSet:Sort :=  cSql
-
-            ENDIF
+            //ARRAY DATA WRKAREA ALREADY CREATEED WITH ORCREATE
+            oRecordSet:Sort := ""
+            aBookMarks := aWAData[ WA_ABOOKMARKS ][n]
+            aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
+            oRecordSet:Filter := aBookMarks
 
          ELSE
             //INDEX FROM SET ADODBF INDEX MIGHT HAVE UDFS OR CONDITIONS
@@ -2868,8 +2855,7 @@ STATIC FUNCTION ADO_ORDLSTADD( nWA, aOrderInfo )
        //it was added to the array by ado_ordcreate we have only to set focus
        cIndex := cOrder //aOrderInfo[UR_ORI_BAG] CAN NOT CONTAIN PATH OR FILESXT
 
-       y := ASCAN( aTmpIndx,{ | x | x == cIndex } )
-
+       y := ASCAN( aTmpIndx, cIndex )
        //VERIFICAR SE JA ESTA NA LISTA E NAO ABRE
        AADD( aWAData[WA_INDEXES],cIndex )
 
@@ -2880,7 +2866,7 @@ STATIC FUNCTION ADO_ORDLSTADD( nWA, aOrderInfo )
        AADD( aWAData[WA_INDEXDESC],aTmpDesc[y])
        AADD( aWAData[ WA_ABOOKMARKS ], aTmpBook[y])
 
-       IF ASCAN( aWAData[WA_INDEXES],{ | x | x == cIndex } ) = 1 //FIRST INDEX GETS CONTROL
+       IF ASCAN( aWAData[WA_INDEXES],cIndex) = 1 //FIRST INDEX GETS CONTROL
           aWAData[WA_INDEXACTIVE] := 1 //always qst one
           aOrderInfo[UR_ORI_TAG] := 1 //1
 
@@ -3031,7 +3017,7 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
        MEMOWRIT(cFile,"nada")
 
     ELSE
-       IF ASCAN( aWAData[WA_INDEXES],{ | x | x == cIndex } ) > 0
+       IF ASCAN( aWAData[WA_INDEXES],cIndex) > 0
          // BUILD ERROR
        ENDIF
 
@@ -3056,7 +3042,7 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
        cForExp := IF( !EMPTY( acondinfo[UR_ORC_CFOR]), acondinfo[UR_ORC_CFOR], "" )
        AADD(aTmpFor,cForExp )//CLEAN THE DOT .AND. .OR.
        AADD(aTmpDbfFor,cForExp)
-       AADD(aTmpDesc,IF( acondinfo[ UR_ORC_DESCEND ], "DESC","") )
+       AADD(aTmpDesc,acondinfo[ UR_ORC_DESCEND ])
        //BUILD THE INDEX
        ADOUDFINDEX( nWa, aOrderCreateInfo[UR_ORCR_BKEY],;
                     acondinfo[UR_ORC_BFOR], ;
@@ -3068,7 +3054,7 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
     ELSE
        AADD(aTmpFor,"")
        AADD(aTmpDbfFor,"")
-       AADD(aTmpDesc, "")
+       AADD(aTmpDesc, .F.)
        //BUILD THE INDEX
        ADOUDFINDEX( nWa, aOrderCreateInfo[UR_ORCR_BKEY], NIL,;
                     aOrderCreateInfo[ UR_ORCR_UNIQUE],;
@@ -3111,11 +3097,9 @@ STATIC FUNCTION ADOUDFINDEX( nWa, xExpression, xCondition, lUnique, lDesc, bEval
 
    IF ! EMPTY( xCondition ) .OR. ! EMPTY( xWhile )
       lRetVal = .T.
-
    ENDIF
 
    IF lRetVal //.OR. PROCNAME( 1 ) = "ADO_ORDCREATE"
-
       aBookMarks :={}
 
       IF !EMPTY( xWhile )
@@ -3224,11 +3208,7 @@ STATIC FUNCTION ADO_ORDDESTROY( nWA, aOrderInfo )
    LOCAL aWAData := USRRDD_AREADATA( nWA ), n
    LOCAL oRecordSet := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
 
-   IF VALTYPE( aOrderInfo[ UR_ORI_TAG ] ) = "C"
-      n:= ASCAN(aWAData[ WA_INDEXES ],{ | x | x == aOrderInfo[ UR_ORI_TAG ] } )
-   ELSE
-      n := aOrderInfo[ UR_ORI_TAG ]
-   ENDIF
+   n:= ASCAN(aWAData[ WA_INDEXES ],aOrderInfo[ UR_ORI_TAG ])
 
    IF n > 0
       ADEL( aWAData[ WA_INDEXES ], n, .T.)
@@ -3355,7 +3335,7 @@ STATIC FUNCTION KeyExprConversion( cOrder, cTableName )
       //TMP FILES NOT PRESENT IN ListIndex ADDED TO THEIR OWN ARRAY FOR THE DURATION OF THE APP
     IF ASCAN(aTempFiles,UPPER(SUBSTR(cOrder,1,3)) ) > 0 .OR. ASCAN(aTempFiles,UPPER(SUBSTR(cOrder,1,4)) ) > 0
        //it was added to the array by ado_ordcreate we have only to set focus
-       y := ASCAN(aTmpIndx,{ | x | x == cOrder } )
+       y := ASCAN(aTmpIndx,cOrder)
 
        IF Y > 0
           cExpress := aTmpDbfExp[y]
@@ -6162,7 +6142,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 2981015"
+RETURN "AdoRdd Version 1.0 Build 281015"
 
 /*                   END ADO SET GET FUNCTONS */
 
