@@ -270,7 +270,9 @@
 #command SET ADO INDEX UDFS TO <array> => ListUdfs( <array> )
 #command SET ADO DEFAULT DELETED FIELD TO <cname>  => ADODEFLDDELETED( <cname> ) /* defining the default name for DELETED field*/
 #command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
+#command SET ADO TABLES LOGICAL FIELDS LIST TO <array>  => ListFieldLogical( <array>) /* defining logical field array list of names*/
 #command SET ADO TABLENAME WITH PATH <x:ON,OFF> => ADOTABLEWITHPATH( Upper( <(x)> ) == "ON" ) /* table name = path_tablename instead of only tablename */
 #command SET ADO CACHESIZE TO <nCache> ASYNC <x:ON,OFF> ASYNCNOWAIT <y:ON,OFF> => ADOPARAMETERS( <nCache>, Upper( <(x)> ) == "ON", Upper( <(y)> ) == "ON" )
 #command SET ADO PRE OPEN THRESHOLD TO <nRecords> => ADOPREOPENTHRESHOLD( <nRecords> )
+#command SET ADO ROOT PATH TO <cNewPath> INSTEAD OF <cOldPath> => ADOROOTPATH( <cNewPath>, <cOldPath> )
 #endif
