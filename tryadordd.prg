@@ -15,6 +15,8 @@
 
     //index related sets
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
+    //if egne does not support logical fields indicate tehm here
+    //SET ADO TABLES LOGICAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD" } },
     SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
     //these should be considered as UDF as they must either be evaluated in clipper way or
     //change the value of the uderlying data
@@ -40,6 +42,8 @@
     SET ADO TABLENAME WITH PATH OFF
     //if this set is on we need a path
     //SET PATH TO "C:\WHATEVER"
+
+    //SET ADO ROOT PATH TO "actual path" INSTEAD OF "uploaded path"
 
     //COnNECTION RELATED SETS
     //need to include complete path
@@ -171,7 +175,7 @@ AND WRITE YOUR OWN TESTING ROUTINES
    BROWSE()
 
    cSql := "CREATE VIEW CONTACTS AS SELECT TABLE1.FIRST, TABLE1.LAST,"+;
-            "TABLE1.AGE, TABLE2.ADDRESS, TABLE2.EMAIL "+;
+            "TABLE1.AGE, TABLE2.ADDRESS, TABLE2.EMAIL, TABLE1.HBRECNO "+;
             "FROM TABLE1 LEFT OUTER JOIN TABLE2 ON TABLE1.CODID = TABLE2.CODID"
    MSGINFO("RUNING SQL "+cSql)
 
