@@ -4496,18 +4496,17 @@ STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
 STATIC FUNCTION ADO_CLEARREL( nWA )
 
  LOCAL aWAData := USRRDD_AREADATA( nWA )
- LOCAL aInfo, n, nPos
+ LOCAL aInfo, n
 
    //CLEAR SCOPES WITH REL IF SCOPE REL
    IF !EMPTY(aWAData[ WA_PENDINGREL ])
        FOR n:= 1 TO LEN(aWAData[ WA_PENDINGREL ]) STEP UR_RI_SIZE //next elements next relations
-           nPos := n+UR_RI_SCOPED
-           IF aWAData[ WA_PENDINGREL ][nPos ] //SCOPE RELATION
+           IF aWAData[ WA_PENDINGREL ][n+UR_RI_SCOPED ] //SCOPE RELATION
               aInfo := Array( UR_ORI_SIZE )
-              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_NUMBER, @aInfo )
+              ADO_ORDINFO( aWAData[ WA_PENDINGREL ][ n+UR_RI_CHILD ], DBOI_NUMBER, @aInfo )
               aInfo[ UR_ORI_NEWVAL ] := ""
-              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPETOP, @aInfo )
-              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPEBOTTOM, @aInfo )
+              ADO_ORDINFO( aWAData[ WA_PENDINGREL ][ n+UR_RI_CHILD ], DBOI_SCOPETOP, @aInfo )
+              ADO_ORDINFO( aWAData[ WA_PENDINGREL ][ n+UR_RI_CHILD ], DBOI_SCOPEBOTTOM, @aInfo )
 
            ENDIF
 
@@ -6647,6 +6646,7 @@ return aNew
 
 #ifndef __XHARBOUR__
 
+/* ALREADY DEFINED IN hbcompact.ch at the top
    #xcommand TRY  => BEGIN SEQUENCE WITH {| oErr | Break( oErr ) }
    #xcommand CATCH [<!oErr!>] => RECOVER [USING <oErr>] <-oErr->
    #xcommand FINALLY => ALWAYS
@@ -6654,7 +6654,7 @@ return aNew
    #define UR_FI_FLAGS           6
    #define UR_FI_STEP            7
    #define UR_FI_SIZE            5 // by Lucas for Harbour
-
+*/
 //13.04.15 functions given by thefull to compile with Harbour WITHOUT FIVEWIN
 function cValToChar( u ); return CStr( u )
 function MsgInfo( u ) ; return Alert( u )
