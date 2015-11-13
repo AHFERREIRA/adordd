@@ -6,6 +6,10 @@
 
 //ATTENTION BESIDES ACCESS ADORDD DOESNT CREATE THE DATABASE
 
+#include "adordd.ch"
+#ifndef __XHARBOUR__
+#include "hbcompat.ch"  //27.10.15 jose quintas advise
+#endif
 
  FUNCTION Main()
  LOCAL cSql :=""
@@ -16,7 +20,8 @@
     //index related sets
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
     //if egne does not support logical fields indicate tehm here
-    //SET ADO TABLES LOGICAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD" } },
+    //SET ADO TABLES LOGICAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD" } }}
+    //SET ADO TABLES DECIMAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD",4,"ANOTHERFILED", 6 } }}
     SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
     //these should be considered as UDF as they must either be evaluated in clipper way or
     //change the value of the uderlying data
