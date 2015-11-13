@@ -494,7 +494,7 @@ STATIC FUNCTION ADOCONNECT(nWA,aOpenInfo)
       aWAData[WA_TABLEINDEX] := CFILENOEXT( CFILENOPATH( UPPER(aOpenInfo[ UR_OI_NAME ]) ) )
 
   CATCH
-      ADOSHOWERROR(aWAData[ WA_CONNECTION ])
+      ADOSHOWERROR(aWAData[ WA_CONNECTION ],  aWAData[ WA_TABLENAME ])
       RETURN HB_FAILURE
 
   END
@@ -1046,6 +1046,9 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
 
       ENDIF
 
+      aWAData[ WA_BOF ] := oRecordSet:Bof()
+      aWAData[ WA_EOF ] := oRecordSet:Eof()
+
       ADO_RECID( nWA, @nRecord )
 
       IF !EMPTY(aWAData[WA_PENDINGREL]) .AND. PROCNAME(2) <> "ADO_RELEVAL" //ENFORCE REL CHILDS BUT NOT IN A ENDLESS LOOP!
@@ -1057,8 +1060,6 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
 
    ENDIF
 
-   aWAData[ WA_BOF ] := oRecordSet:Bof()
-   aWAData[ WA_EOF ] := oRecordSet:Eof()
 
    RETURN HB_SUCCESS
 
@@ -1082,6 +1083,8 @@ STATIC FUNCTION ADO_GOTOP( nWA )
 
       ELSE
          oRecordSet:MoveFirst()
+         aWAData[ WA_BOF ] := oRecordSet:Bof()
+         aWAData[ WA_EOF ] := oRecordSet:Eof()
 
       ENDIF
 
@@ -1101,7 +1104,7 @@ STATIC FUNCTION ADO_GOTOP( nWA )
 
    ENDIF
 
-   aWAData[ WA_EOF ] :=  oRecordSet:Eof()
+   //aWAData[ WA_EOF ] :=  oRecordSet:Eof()
 
    RETURN HB_SUCCESS
 
@@ -1126,6 +1129,8 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
          ENDIF
       ELSE
          oRecordSet:MoveLast()
+         aWAData[ WA_BOF ] := oRecordSet:Bof()
+         aWAData[ WA_EOF ] := oRecordSet:Eof()
 
       ENDIF
 
@@ -1145,7 +1150,7 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
    ENDIF
 
-   aWAData[ WA_EOF ] :=  oRecordSet:Eof()
+   //aWAData[ WA_EOF ] :=  oRecordSet:Eof()
 
    RETURN HB_SUCCESS
 
@@ -1234,6 +1239,7 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
       ELSEIF nToSkip != 0
          IF ( nToSkip > 0 .AND.!oRecordSet:Eof ) .OR. ;
             ( nToSkip < 0 .AND.!oRecordSet:Bof )
+
             oRecordSet:Move( nToSkip )
 
             IF nToSkip > 0
@@ -1401,7 +1407,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 
        CATCH
           NETERR(.T.)
-          ADOSHOWERROR( aWdata[WA_CONNECTION] )
+          ADOSHOWERROR( aWdata[WA_CONNECTION],  aWData[ WA_TABLENAME ] )
 
        END*/
 
@@ -1663,9 +1669,8 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
 
    aFieldInfo := ADO_FIELDSTRUCT( Rs, nField-1, nWA )
 
-   IF aWAData[ WA_EOF ] .OR. rs:EOF .OR. rs:BOF
+   IF rs:EOF .OR. rs:BOF .OR. aWAData[ WA_EOF ]
       xValue := NIL
-
       IF aFieldInfo[7] == HB_FT_STRING
          xValue := Space( aFieldInfo[3] )
       ENDIF
@@ -1708,7 +1713,6 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
          ADO_RECID(nWA, @nRecNo)
          ADO_RESYNC( nWA, rs )
          ADO_GOTO(nWa, nRecNo) //IF DELETED (not found) GOES EOF THEN TRYING TO LOCK IT WILL FAIL NO UPDATE POSSIBLE
-
          ADO_GETVALUE( nWA, nField, xValue )
 
       END
@@ -1831,7 +1835,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
    ENDIF
 
-   IF ! aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xvalue )
+   IF !aWAData[ WA_EOF ] .AND. !( oRecordSet:Fields( nField - 1 ):Value == xvalue )
 
       IF aStruct[6]
          IF aStruct[2] = "N" .AND. !VALTYPE( xValue ) = "L"
@@ -2201,26 +2205,19 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
          nDBFFieldType := HB_FT_AUTOINC
       ENDIF
 
-/*      IF oField:name = ADO_GET_FIELD_DELETED(  aWAData[ WA_TABLEINDEX ] )   //DEFINED IN ADO_OPEN FIELD RECNO
-         cType := 'L'
-         nLen     := 1
-         lRW   := .f.
-         nDBFFieldType := HB_FT_LOGICAL
-      ENDIF
-*/
-*/
-
    ELSEIF ASCAN( { adSingle, adDouble }, nType ) > 0
       cType    := 'N'
       nLen     := Min( 19, oField:Precision  ) //Max( 19, oField:Precision + 2 )
       nDBFFieldType := HB_FT_DOUBLE
       nDec  := 2
-      /*
+
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
          nDec  := oField:NumericScale
          nDBFFieldType :=  HB_FT_DOUBLE //HB_FT_INTEGER WICH ONE IS CORRECT?
+      ELSEIF oField:NumericScale  = 255
+         //DOESNT SUPPORT DECIMALS SO WE HAVE TO LOOK INTO OUR SET
+         nDec := ADO_GET_FIELD_DECIMAL( aWAData[ WA_TABLEINDEX ], oField )
       ENDIF
-      */
 
    ELSEIF ASCAN( { adCurrency }, nType ) > 0
       cType    := 'N'      // 'Y'
@@ -2312,7 +2309,7 @@ FUNCTION ADOSTRUCT( oRs, nWA )
 
 STATIC FUNCTION ADO_IS_FIELD_LOGICAL( cTable, oField )
   LOCAL aFlds := ListFieldLogical(  )
-  LOCAL lExist := .F., n,X
+  LOCAL lExist := .F., n, x
   LOCAL cField := oField:Name
 
    lExist := cField == ADO_GET_FIELD_DELETED( cTable ) //IS IT DELETED FIELD
@@ -2338,6 +2335,33 @@ STATIC FUNCTION ADO_IS_FIELD_LOGICAL( cTable, oField )
 
    RETURN lExist
 
+
+STATIC FUNCTION ADO_GET_FIELD_DECIMAL( cTable, oField )
+  LOCAL aFlds := ListFieldDecimal(  )
+  LOCAL nDecimal := 2, n, x
+  LOCAL cField := oField:Name
+
+   IF !EMPTY( aFlds ) //IS THIS FILE LOGICAL DEFINED IN THE SET
+      n := ASCAN( aFlds, { |z| z[1] == cTable } )
+      //CASE TABLES HAVE A COMPOUNF NAME EX NAME+USERNR = USER 1 NAME1, USER 2 NAME2
+      // IN SET ADODBF INDEX THSE CASES MUST PLACED ONY THE NAME
+      IF n = 0
+         n := ASCAN( aFlds, { |z| z[1] == SUBSTR( cTable, 1 , LEN( z[ 1 ] ) ) } )
+
+      ENDIF
+      IF n > 0
+         x := ASCAN( aFlds[ n,2 ], { |z| z == IF( VALTYPE( z ) == "C",cField,999) } )
+         IF x > 0
+            nDecimal := aFlds[ n,2,x+1 ]
+
+         ENDIF
+
+      ENDIF
+
+   ENDIF
+
+
+   RETURN nDecimal
 
 /*                          END FIELD RELATED FUNCTIONS  */
 
@@ -3821,7 +3845,7 @@ STATIC FUNCTION ADO_FLUSH( nWA )
       ENDIF
 
    CATCH
-      ADOSHOWERROR( USRRDD_AREADATA( nWA )[ WA_CONNECTION ] )
+      ADOSHOWERROR( USRRDD_AREADATA( nWA )[ WA_CONNECTION ],  USRRDD_AREADATA( nWA )[ WA_TABLENAME ] )
 
    END
 
@@ -4452,11 +4476,6 @@ STATIC FUNCTION ADO_DBEVAL( nWA, aEvalInfo )
 
    ENDDO
 
-   //OTHERWISE NEXT GOTOP DOESNT WORK CORRECTLY
-   IF aWAData[ WA_EOF ]
-      DBSKIP(-1)
-
-   ENDIF
 
    RETURN HB_SUCCESS
 
@@ -4476,7 +4495,25 @@ STATIC FUNCTION ADO_EVALBLOCK( nArea, bBlock, uResult )
 
 STATIC FUNCTION ADO_CLEARREL( nWA )
 
-   LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
+ LOCAL aInfo, n, nPos
+
+   //CLEAR SCOPES WITH REL IF SCOPE REL
+   IF !EMPTY(aWAData[ WA_PENDINGREL ])
+       FOR n:= 1 TO LEN(aWAData[ WA_PENDINGREL ]) STEP UR_RI_SIZE //next elements next relations
+           nPos := n+UR_RI_SCOPED
+           IF aWAData[ WA_PENDINGREL ][nPos ] //SCOPE RELATION
+              aInfo := Array( UR_ORI_SIZE )
+              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_NUMBER, @aInfo )
+              aInfo[ UR_ORI_NEWVAL ] := ""
+              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPETOP, @aInfo )
+              ADO_ORDINFO( aRelInfo[ UR_RI_CHILD ], DBOI_SCOPEBOTTOM, @aInfo )
+
+           ENDIF
+
+       NEXT
+
+    ENDIF
 
     aWAData[ WA_PENDINGREL ] := NIL
     aWAData[ WA_LASTRELKEY ] := NIL
@@ -4663,7 +4700,7 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
 
    CATCH //modified by LucasDeBeltran
          //INFORM ADOERROR
-         ADOSHOWERROR( aWAData[ WA_CONNECTION ] )
+         ADOSHOWERROR( aWAData[ WA_CONNECTION ], aWAData[ WA_TABLENAME ] )
          lNoError := .F.
 
    END
@@ -4834,6 +4871,7 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
                         cSql  += " MONEY"
                      ELSE
                         cSql  += " DOUBLE"  // Decimal / Numeric type has issues with older versions
+                        ADO_ADDLISTFIELDDECIMAL( aWAData, aWAData[ WA_TABLEINDEX ], aStruct[ nCol,1 ], aStruct[ nCol,4 ] )
                      ENDIF
                   ELSEIF dbEngine == "MSSQL"
                      IF aStruct[ nCol,4 ] == 0
@@ -4869,6 +4907,7 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
                         cSql  += IF( aStruct[ nCol,3 ] <= 9, " INT", " BIGINT" )
                      ELSE
                         cSql  += " NUMERIC( " + c + " )" //REAL BY AFINITY REAL IN SQLITE
+                        ADO_ADDLISTFIELDDECIMAL( aWAData, aWAData[ WA_TABLEINDEX ], aStruct[ nCol,1 ], aStruct[ nCol,4 ] )
                      ENDIF
                   ELSE
                      cSql  += " NUMERIC( " + c + " )"
@@ -4910,7 +4949,7 @@ LOCAL aFlds := ListFieldLogical(  ), n
 
         IF n > 0
            IF ASCAN(  aFlds[ n, 2 ], { |z| z == FldName } ) = 0
-              AINS( aFlds[ n, 2 ], LEN( aFlds[ n, 2 ] ), FldName, .T. )
+              AADD( aFlds[ n, 2 ], FldName )
 
            ENDIF
 
@@ -4921,7 +4960,7 @@ LOCAL aFlds := ListFieldLogical(  ), n
 
      ELSE
         IF ASCAN(  aFlds[ n, 2 ], { |z| z == FldName } ) = 0
-           AINS( aFlds[ n, 2 ], LEN( aFlds[ n, 2 ] ), FldName, .T. )
+           AADD( aFlds[ n, 2 ], FldName )
 
         ENDIF
 
@@ -4933,6 +4972,48 @@ LOCAL aFlds := ListFieldLogical(  ), n
   ENDIF
 
    ListFieldLogical( aFlds ) //ASSING NEW VALUES
+
+  RETURN NIL
+
+
+STATIC FUNCTION ADO_ADDLISTFIELDDECIMAL(aWAData, cTable, FldName, nDecimal )
+LOCAL aFlds := ListFieldDecimal(  ), n
+
+  IF !EMPTY( aFlds ) //IS THIS FILE LOGICAL DEFINED IN THE SET
+
+     n := ASCAN( aFlds, { |z| z[1] == cTable } )
+     //CASE TABLES HAVE A COMPOUNF NAME EX NAME+USERNR = USER 1 NAME1, USER 2 NAME2
+     // IN SET ADODBF INDEX THSE CASES MUST PLACED ONY THE NAME
+     IF n = 0
+        n := ASCAN( aFlds, { |z| z[1] == SUBSTR( cTable, 1 , LEN( z[ 1 ] ) ) } )
+
+        IF n > 0
+           IF ASCAN(  aFlds[ n, 2 ], { |z| z == FldName } ) = 0
+              AADD( aFlds[ n, 2 ], FldName )
+              AADD( aFlds[ n, 2 ], nDecimal )
+
+           ENDIF
+
+        ELSE
+           AADD( aFlds, { cTable, { FldName, nDecimal } } )
+
+        ENDIF
+
+     ELSE
+        IF ASCAN(  aFlds[ n, 2 ], { |z| z == IF( VALTYPE( z ) == "C",FldName,999 )} ) = 0
+           AADD( aFlds[ n, 2 ], FldName )
+           AADD( aFlds[ n, 2 ], nDecimal )
+
+        ENDIF
+
+     ENDIF
+
+  ELSE
+     AADD( aFlds, { cTable, { FldName, nDecimal } } )
+
+  ENDIF
+
+   ListFieldDecimal( aFlds ) //ASSING NEW VALUES
 
   RETURN NIL
 
@@ -4988,7 +5069,7 @@ STATIC FUNCTION ADOUNQUOTE( cCol )
 
 
 STATIC FUNCTION ADOTEMPTABLE( DbEngine, oCon, cTable)
- //LOCAL cMark := ""
+ LOCAL cMark := ""
 
   TRY
     oCon:Execute( "DROP TABLE " + cTable )
@@ -5097,7 +5178,7 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
               // OpenSchema(adSchemaTables) is not supported by provider
               // we do not know if the table exists
-              ADOSHOWERROR( oCn )  // Comment out in final release
+              ADOSHOWERROR( oCn, cTable )  // Comment out in final release
 
           END
       END
@@ -5117,7 +5198,7 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
       CATCH
           // OpenSchema(adSchemaTables) is not supported by provider
           // we do not know if the table exists
-          ADOSHOWERROR( oCn )  // Comment out in final release
+          ADOSHOWERROR( oCn, cIndex )  // Comment out in final release
 
       END
 
@@ -5138,7 +5219,7 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
       CATCH
          // OpenSchema(adSchemaViews) is not supported by provider
          // we do not know if the table exists
-         ADOSHOWERROR( oCn )  // Comment out in final release
+         ADOSHOWERROR( oCn, cView )  // Comment out in final release
 
       END
 
@@ -5182,7 +5263,7 @@ STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,cView, DBEngine)
          lRet := .T.
 
       CATCH
-         ADOSHOWERROR( oCon, .f. )
+         ADOSHOWERROR( oCon, cTable ,.f. )
 
       END
 
@@ -5210,7 +5291,7 @@ STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,cView, DBEngine)
          lRet := .T.
 
       CATCH
-          ADOSHOWERROR( oCon, .f. )
+          ADOSHOWERROR( oCon, cIndex, .f. )
 
       END
 
@@ -5222,7 +5303,7 @@ STATIC FUNCTION ADODROP( oCon, cTable, cIndex ,cView, DBEngine)
          lRet := .T.
 
       CATCH
-         ADOSHOWERROR( oCon, .f. )
+         ADOSHOWERROR( oCon, cView, .f. )
 
       END
 
@@ -5741,18 +5822,20 @@ STATIC FUNCTION ADOSTATUSMSG( nStatus, fName, xValue, xNewValue, LockType )
   RETURN NIL
 
 
-FUNCTION ADOSHOWERROR( oCn, lSilent )
+FUNCTION ADOSHOWERROR( oCn, cTable, lSilent )
 
    LOCAL nErr, oErr, cErr
 
    DEFAULT oCn TO oConnection
    DEFAULT lSilent TO .F.
+   DEFAULT cTable TO ""
 
    IF ( nErr := oCn:Errors:Count ) > 0
       oErr  := oCn:Errors( nErr - 1 )
       IF ! lSilent
          WITH OBJECT oErr
-            cErr     := oErr:Description
+            cErr     := cTable
+            cErr     += oErr:Description
             cErr     += CRLF + 'Source       : ' + oErr:Source
             cErr     += CRLF + 'NativeError  : ' + cValToChar( oErr:NativeError )
             cErr     += CRLF + 'Error Source : ' + oErr:Source
@@ -6020,9 +6103,10 @@ FUNCTION hb_AdoRddFile( cFile )
 FUNCTION Hb_AdoRddCopyFile( cFileOrig, cFileDestin, lOverwrite )
  LOCAL lRet := .F.
  LOCAL dbEngine := ADODEFAULTS()[3]
+ LOCAL nArea := SELECT()
 
   lOverwrite := IF( EMPTY( lOverWrite ), .F., lOverWrite )
-  cFileOrig := ADO_FILECONVERT( cFileOrig )
+  //cFileOrig := ADO_FILECONVERT( cFileOrig )
   cFileDestin := ADO_FILECONVERT( cFileDestin )
 
   IF !hb_AdoRddFile( cFileOrig )
@@ -6045,13 +6129,12 @@ FUNCTION Hb_AdoRddCopyFile( cFileOrig, cFileDestin, lOverwrite )
   ENDIF
 
   IF lRet
-     hb_GetAdoConnection():execute( "CREATE TABLE "+cFileDestin+ " AS SELECT * FROM "+cFileOrig )
-     //WITH THIS CREATE TABLE PRIMARY KEY ITS NOT ENFORCED AS PER ORIGIAL TABLE
-     hb_GetAdoConnection():execute( "ALTER TABLE "+cFileDestin+ " CHANGE COLUMN "+;
-          ADO_GET_FIELD_RECNO( cFileOrig )+" "+ADO_GET_FIELD_RECNO( cFileOrig )+;
-          " INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY" )
+     SELE 0
+     USE cFileOrig ALIAS cOrigem
+     copy to cFileDestin while !eof() VIA "ADORDD"
      lRet :=  hb_AdoRddFile( cFileDestin )
-
+     cOrigem->( dbclosearea( ) )
+     SELECT( nArea )
   ENDIF
 
   RETURN lRet
@@ -6113,7 +6196,25 @@ FUNCTION hb_AdoUpload( cBaseDir, cRDD, dbEngine, lOverWrite )
    NEXT
 
    MEMOWRIT(  "BOOELANFIELDS.ADO", cStr )
-   MSGINFO( "LIST OF ALL BOOLEAN FIELDS PER TABLE WRITEN IN BOOELANFIELDS.ADO " )
+
+   //GIVE THE DECIMAL FIELDS PER TABLE TO THE USER OF ALL UPLOADED TABLES
+   aArr := ListFieldDecimal(  )
+
+   FOR n := 1 TO LEN( aArr )
+       cStr += aArr[ n ,1 ]+CRLF
+
+       FOR z := 1 TO LEN( aArr[ N, 2 ] ) STEP 2
+           cStr += "   "+aArr[ N, 2, z ]+", "+ALLTRIM( STR( aArr[ N, 2, Z+1 ] ,20, 0 ) )+CRLF
+
+       NEXT
+
+   NEXT
+
+   MEMOWRIT(  "DECIMALFIELDS.ADO", cStr )
+
+
+   MSGINFO( "LIST OF ALL BOOLEAN FIELDS PER TABLE WRITEN IN BOOELANFIELDS.ADO "+CRLF+;
+            "LIST OF ALL DECIMAL FIELDS PER TABLE WRITEN IN DECIMALFIELDS.ADO ")
 
 Return cStr
 
@@ -6131,13 +6232,23 @@ FUNCTION ListFieldDeleted( aList )
 
 
 FUNCTION ListFieldLogical( alist )
- STATIC aListFieldLogical
+ STATIC aListFieldLogical := {}
 
   IF !EMPTY(aList)
      aListFieldLogical := aList
   ENDIF
 
   RETURN aListFieldLogical
+
+
+FUNCTION ListFieldDecimal( alist )
+ STATIC aListFieldDecimal := {}
+
+  IF !EMPTY(aList)
+     aListFieldDecimal := aList
+  ENDIF
+
+  RETURN aListFieldDecimal
 
 
 FUNCTION ListIndex(aList) //ATTENTION ALL MUST BE UPPERCASE
@@ -6418,7 +6529,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 101115"
+RETURN "AdoRdd Version 1.0 Build 131115"
 
 /*                   END ADO SET GET FUNCTONS */
 
