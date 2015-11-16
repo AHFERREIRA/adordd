@@ -224,7 +224,9 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
    LOCAL cName, aField, oError, nResult
    LOCAL oRecordSet, nTotalFields, n
 
-   ADOCONNECT (nWA, aOpenInfo )
+   IF ADOCONNECT( nWA, aOpenInfo ) <> HB_SUCCESS
+       THROW( ErrorNew( "ADORDD", 10500, 10500, "Connection to server/database not available" ) )
+   ENDIF
 
    /* When there is no ALIAS we will create new one using file name */
    IF Empty( aOpenInfo[ UR_OI_ALIAS ] )
@@ -613,7 +615,7 @@ FUNCTION ADODB_CLOSE()
  LOCAL n
 
    FOR n := 1 to 255
-       IF !EMPTY( ALIAS( n ) ) .AND. ( n )->( RDDNAME(  ) ) = "ADORDD"
+       IF !EMPTY( ALIAS( n ) ) .AND. ( ALIAS( n ) )->( RDDNAME(  ) ) = "ADORDD"
           ADO_CLOSE( n )
        ENDIF
    NEXT
@@ -1660,7 +1662,7 @@ STATIC FUNCTION ADO_GETVALUE( nWA, nField, xValue )
    LOCAL rs := USRRDD_AREADATA( nWA )[ WA_RECORDSET ]
    LOCAL aFieldInfo, nRecNo
 
-   //MISSIGNG OLE VARLEN MODTIME ROWVER CURDUBLE FLOAT LONG CURRENCY BLOB IMAGE
+   //MISSIGNG OLE VARLEN MODTIME ROWVER CURDUBLE BLOB IMAGE
    //DONT KNOW DEFAULT VALUES
    IF nField < 1 .OR. nField > ( nWA )->( FCOUNT() )
       xValue := NIL
@@ -4610,7 +4612,9 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
 
    aOpenInfo[ UR_OI_NAME ] := cTable
 
-   ADOCONNECT(nWA,aOpenInfo)
+   IF ADOCONNECT( nWA, aOpenInfo ) <> HB_SUCCESS
+       THROW( ErrorNew( "ADORDD", 10500, 10500, "Connection to server/database not available" ) )
+   ENDIF
 
    /*
    add HBDELETED BY MAROMANO
@@ -4654,6 +4658,13 @@ STATIC FUNCTION ADO_CREATE( nWA, aOpenInfo  )
 
        ELSE
           cMarkTmp := "TABLE "
+          //TO BE COMPATIBLE WITH CLIPPER DBCREATE JUST OVERWRITES IT!
+          TRY
+              aWAData[ WA_CONNECTION ]:Execute( "DROP TABLE " + aWAData[ WA_TABLENAME ] )
+
+          CATCH
+              //DO NOTHING IF DOE NOT EXIST
+          END
 
        ENDIF
 
@@ -5420,7 +5431,7 @@ STATIC FUNCTION ADO_INFO(nWa, uInfoType,uReturn)
          uReturn := "Version 2015"
 
      CASE uInfoType == DBI_RDD_VERSION // 102  /* current RDD's version               */
-          uReturn := "Version 2015"
+          uReturn := ADOVERSION()
 
   ENDCASE
 
@@ -5676,8 +5687,8 @@ STATIC FUNCTION ADOCON_CHECK()
  LOCAL lCnOpened := .F.
 
    IF oConnection != NIL
-      IF oConnection:State == 0
-         oConnection:Close()
+      IF oConnection:State == 0 //not opened
+         oConnection:Cancel()  //close()
          TRY
             oConnection:Open()
             lCnOpened := .T.
@@ -5735,7 +5746,8 @@ STATIC FUNCTION ADOGETCONNECT( cDB, cServer, cEngine, cUser, cPass  )
   CATCH
      ADOSHOWERROR( oCn )
      oCn := nil
-     QUIT  //lucas deBeltran
+     THROW( ErrorNew( "ADORDD", 10500, 10500, "Connection to server/database not available" ) )
+     // QUIT  //lucas deBeltran
 
   END
 
@@ -5821,8 +5833,7 @@ STATIC FUNCTION ADOSTATUSMSG( nStatus, fName, xValue, xNewValue, LockType )
   RETURN NIL
 
 
-FUNCTION ADOSHOWERROR( oCn, cTable, lSilent )
-
+FUNCTION ADOSHOWERROR( oCn, cTable, lSilent ) //CHANGES BY BYTE-ONE
    LOCAL nErr, oErr, cErr
 
    DEFAULT oCn TO oConnection
@@ -5833,20 +5844,20 @@ FUNCTION ADOSHOWERROR( oCn, cTable, lSilent )
       oErr  := oCn:Errors( nErr - 1 )
       IF ! lSilent
          WITH OBJECT oErr
-            cErr     := cTable
+            cErr     := IF( !EMPTY( cTable ),'Table: ' + cTable +CRLF + CRLF ,"")
             cErr     += oErr:Description
-            cErr     += CRLF + 'Source       : ' + oErr:Source
-            cErr     += CRLF + 'NativeError  : ' + cValToChar( oErr:NativeError )
+            cErr     += CRLF + 'Source : ' + oErr:Source
+            cErr     += CRLF + 'NativeError : ' + cValToChar( oErr:NativeError )
             cErr     += CRLF + 'Error Source : ' + oErr:Source
-            cErr     += CRLF + 'Sql State    : ' + oErr:SQLState
+            cErr     += CRLF + 'Sql State : ' + oErr:SQLState
             cErr     += CRLF + REPLICATE( '-', 50 )
             cErr     += CRLF + PROCNAME( 1 ) + "( " + cValToChar( PROCLINE( 1 ) ) + " )"
-            cErr     += CRLF + PROCNAME( 2 )  + cValToChar( PROCLINE( 2 ) )
-            cErr     += CRLF + PROCNAME( 3 )  + cValToChar( PROCLINE( 3 ) )
-            cErr     += CRLF + PROCNAME( 4 )  + cValToChar( PROCLINE( 4 ) )
-            cErr     += CRLF + PROCNAME( 5 )  + cValToChar( PROCLINE( 5 ) )
-            cErr     += CRLF + PROCNAME( 6 )  + cValToChar( PROCLINE( 6 ) )
-            cErr     += CRLF + PROCNAME( 7 )  + cValToChar( PROCLINE( 7 ) )
+            cErr     += CRLF + PROCNAME( 2 ) + "( " + cValToChar( PROCLINE( 2 ) ) + " )"
+            cErr     += CRLF + PROCNAME( 3 ) + "( " + cValToChar( PROCLINE( 3 ) ) + " )"
+            cErr     += CRLF + PROCNAME( 4 ) + "( " + cValToChar( PROCLINE( 4 ) ) + " )"
+            cErr     += CRLF + PROCNAME( 5 ) + "( " + cValToChar( PROCLINE( 5 ) ) + " )"
+            cErr     += CRLF + PROCNAME( 6 ) + "( " + cValToChar( PROCLINE( 6 ) ) + " )"
+            cErr     += CRLF + PROCNAME( 7 ) + "( " + cValToChar( PROCLINE( 7 ) ) + " )"
 
             MSGALERT( cErr, IF( oCn:Provider = NIL, "ADO ERROR",oCn:Provider ) )
 
@@ -5855,13 +5866,13 @@ FUNCTION ADOSHOWERROR( oCn, cTable, lSilent )
 
    ELSE
       MSGALERT( "ADO ERROR UNKNOWN"+;
-                CRLF + PROCNAME( 1 )  + cValToChar( PROCLINE( 1 ) ) +;
-                CRLF + PROCNAME( 2 )  + cValToChar( PROCLINE( 2 ) )+;
-                CRLF + PROCNAME( 3 )  + cValToChar( PROCLINE( 3 ) )+;
-                CRLF + PROCNAME( 4 )  + cValToChar( PROCLINE( 4 ) )+;
-                CRLF + PROCNAME( 5 )  + cValToChar( PROCLINE( 5 ) )+;
-                CRLF + PROCNAME( 6 )  + cValToChar( PROCLINE( 6 ) )+;
-                CRLF + PROCNAME( 7 )  + cValToChar( PROCLINE( 7 ) )  )
+                CRLF + PROCNAME( 1 )  + "( " + cValToChar( PROCLINE( 1 ) ) + " )" + ;
+                CRLF + PROCNAME( 2 )  + "( " + cValToChar( PROCLINE( 2 ) ) + " )" + ;
+                CRLF + PROCNAME( 3 )  + "( " + cValToChar( PROCLINE( 3 ) ) + " )" + ;
+                CRLF + PROCNAME( 4 )  + "( " + cValToChar( PROCLINE( 4 ) ) + " )" + ;
+                CRLF + PROCNAME( 5 )  + "( " + cValToChar( PROCLINE( 5 ) ) + " )" + ;
+                CRLF + PROCNAME( 6 )  + "( " + cValToChar( PROCLINE( 6 ) ) + " )" + ;
+                CRLF + PROCNAME( 7 )  + "( " + cValToChar( PROCLINE( 7 ) )  )
 
    ENDIF
 
@@ -6078,7 +6089,7 @@ FUNCTION hb_AdoRddFile( cFile )
 
   n := ASCAN( aDbExt, UPPER( CFILEEXT( cFile ) ) )
 
-  IF n > 0  //LOOK FOR DATABASE FILES
+  IF n > 0  .AND. RDDSETDEFAULT() == "ADORDD" //LOOK FOR DATABASE FILES
      IF n < 6  //TABLES
        lRetVal := ADOFILE(hb_GetAdoConnection(), cFile  )
 
@@ -6088,7 +6099,11 @@ FUNCTION hb_AdoRddFile( cFile )
      ENDIF
 
   ELSE //LOOK FOR FILE SYSTEM FILES
-     lRetVal := ADOFILE(hb_GetAdoConnection(), NIL, NIL, cFile  ) //VIEWS
+     IF  RDDSETDEFAULT() == "ADORDD"
+         lRetVal := ADOFILE(hb_GetAdoConnection(), NIL, NIL, cFile  ) //VIEWS
+     ELSE
+        lRetval := .F.
+     ENDIF
      IF !lRetval
         lRetval := FILE( cFile ) //IS IT A NORMAL FILE
 
@@ -6473,12 +6488,13 @@ FUNCTION ADOROOTPATH( cNewPath, cOldPath )
   RETURN {s_NewPath, s_OldPath}
 
 
-FUNCTION ADOPREOPENTHRESHOLD( nRecords )
+FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
  LOCAL aTables := hb_AdoRddGetTables( oConnection )
  LOCAL n, oRecordSet, z
  LOCAL aFiles :=  ListFieldRecno(), cTableIndex, y
 
   DEFAULT nRecords TO 6000
+  DEFAULT aMask TO {}
 
   IF oConnection == NIL
      MSGINFO( "The SET ADO PRE OPEN THRESHOLD TO must be placed"+CRLF+;
@@ -6493,27 +6509,30 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords )
 
   FOR n := 1 TO LEN( aTables )
       TRY
-          AADD( a_preopen, { aTables[ n ],  } )
-          z := LEN( a_preopen )
-          a_preopen[ z, 2 ] := ADOCLASSNEW( "ADODB.Recordset" )
-          a_preopen[ z, 2 ]:CursorType     := adOpenDynamic
-          a_preopen[ z, 2 ]:CursorLocation := adUseClient
-          a_preopen[ z, 2 ]:LockType       := adLockOptimistic
+          IF LEN( aMask ) = 0 .OR. ASCAN( aMask, {| x | x $ aTables[ n ] } ) > 0
+             AADD( a_preopen, { aTables[ n ],  } )
+             z := LEN( a_preopen )
+             a_preopen[ z, 2 ] := ADOCLASSNEW( "ADODB.Recordset" )
+             a_preopen[ z, 2 ]:CursorType     := adOpenDynamic
+             a_preopen[ z, 2 ]:CursorLocation := adUseClient
+             a_preopen[ z, 2 ]:LockType       := adLockOptimistic
 
-          //look for any special recno field for this table
-          //table retuned can have a concaneted name
-          y := ASCAN( aFiles, { | z | AT( aTables[ n ], z[ 1 ] ) > 0  } )
-          IF y > 0
-             cTableIndex := aFiles[ y, 2 ]
-          ENDIF
+             //look for any special recno field for this table
+             //table retuned can have a concaneted name
+             y := ASCAN( aFiles, { | z | AT( aTables[ n ], z[ 1 ] ) > 0  } )
+             IF y > 0
+                cTableIndex := aFiles[ y, 2 ]
+             ENDIF
 
-          a_preopen[ z, 2 ]:Open( "SELECT * FROM " + aTables[ n ]+" ORDER BY "+;
-                                  ADO_GET_FIELD_RECNO( cTableIndex ), oConnection )
+             a_preopen[ z, 2 ]:Open( "SELECT * FROM " + aTables[ n ]+" ORDER BY "+;
+                                     ADO_GET_FIELD_RECNO( cTableIndex ), oConnection )
 
-          IF a_preopen[ z, 2 ]:RecordCount < nRecords
-             a_preopen[ z, 2 ]:Close()
-             a_preopen[ z, 2 ] := NIL
-             ADEL( a_preopen, z, .T.  )
+             IF a_preopen[ z, 2 ]:RecordCount < nRecords
+                a_preopen[ z, 2 ]:Close()
+                a_preopen[ z, 2 ] := NIL
+                ADEL( a_preopen, z, .T.  )
+             ENDIF
+
           ENDIF
 
       CATCH
@@ -6528,7 +6547,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 131115"
+RETURN "AdoRdd Version 1.0 Build 161115"
 
 /*                   END ADO SET GET FUNCTONS */
 
