@@ -1,0 +1,186 @@
+1) Is adordd pure ADO ?
+
+Yes
+
+2) Does it work like another rdd without any limitations ?
+
+Yes and its even more compatible with clipper dbf kind of rdds than ADS rdd.
+You don't need anymore to be stuck to dbf kind of rdds.
+
+
+3) Can I just link it with my app and run?
+
+
+No.
+You need to pre configure adordd with a couple of SETs in the top of your app prg,
+but you don't need to alter any of your app code.
+Please check 01_README.PDF and tryadordd.prg at github.
+All this will take only a couple of minutes.
+
+
+4) How do I configue adordd ?
+
+At your initial or main procedure place:
+
+CODE: SELECT ALL  EXPAND VIEW
+
+#INCLUDE "adordd.ch"
+
+    RddRegister("ADORDD",1) 
+    RddSetDefault("ADORDD") 
+
+    IF RDDSETDEFAULT() == "ADORDD"
+
+       //clipper index expressions as used by your app.
+       //if your app uses dynamic build tables names place here a tablename only the static part of it.
+       SET ADODBF TABLES INDEX LIST TO check 01_readme.pdf for arrray spec
+       
+       //temporary index names static part of index name
+       SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+       //you should place here all index expressions that change the type or en of a field and or your UDFs 
+       SET ADO INDEX UDFS TO {"IF","&","SUBSTR","==","DESCEND","MYFUNC"}
+
+       //only needed for engines not supporting these kind of fields ex oracle sqlite access
+       SET ADO TABLES LOGICAL FIELDS LIST TO { { "ACESS", { "PODEFAZER" } }  }
+   
+       //only needed for engines not supporting exact decimal field notation ex access sqlite
+       SET ADO TABLES DECIMAL FIELDS LIST TO ;
+                      { {"ENCCLIST",{"PRECOVENDA",4,"PRECOVEEST",4 } },;
+                        {"ENCFOCLI", {"PRECOUNIT", 4 } } }
+
+       Both these sets are written for you by adordd when uploading the tables.
+
+       //defaut field to be used as recno
+       SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+       //only needed if diferent for tables with different recno field from the default
+       //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1",{"ID"}},{"TABLE1",{"ID"}}}
+       //field to be used as deleted flag
+       SET ADO DEFAULT DELETED FIELD TO "HBDELETE"
+       //only needed if diferent for tables with different deleted flag field from the default
+       //SET ADO FIELDDELETED TABLES LIST TO {"CLIENTE","HBMYDLETED1" }
+
+       // if you want to have lock control as in any other rdd.
+       // you will need to have a share path to it
+       // working in WAN you will need for ex a VPN to this share path.
+       //SET ADO LOCK CONTROL SHAREPATH TO  "d:\followup-testes" RDD TO "DBFCDX"
+       SET ADO FORCE LOCK OFF
+
+       // here connection gets active
+       SET ADO DEFAULT DATABASE TO 
+
+       //upload the database path structure as part of the table name.
+       //suppose that you have same table name in different folders.
+       // without tis set you could not upload both.
+       // with thsi set the path becomes part of the table name.
+       SET ADO TABLENAME WITH PATH ON
+       // uploaded with one path working now with another
+       SET ADO ROOT PATH TO .... INSTEAD OF .....
+         
+       //this set has an impact on performance as app execution continues
+       //before recordset itsstill being build.
+       SET ADO CACHESIZE TO 50 ASYNC ON ASYNCNOWAIT ON
+
+       //pre open recordset at startup for faster acces during app execution
+       SET ADO PRE OPEN THRESHOLD TO 5000
+
+    ENDIF
+
+ 
+
+
+5) Does it works with xHarbour and Harbour ?
+
+Yes.
+
+
+6) How do I port my dbfs to SQL and how long can it take?
+
+Place in your initial procedure after all adordd SETs:
+
+CODE: SELECT ALL  EXPAND VIEW
+
+hb_AdoUpload( "C:\My root databse path", "DBFCDX", "MY SQL CHOSEN ENGINE", .f. )
+ 
+
+
+Choosing the last parameter .f. lOverwrite it allows you if you need to interrupt
+porting of dbfs to SQL to run it again from the last uploaded table.
+After loading it your app will continue execution now in the SQL chosen engine.
+You can after comment that line to avoid run it again when app starts again.
+
+Depending n your tables average size (millions of records) it can take long time.
+If this is your case leave it uploading during night.
+
+
+7) Can I open tables with million of records without a where clause? 
+
+Yes. 
+In this case you might use SET ADO THRESHOLD to wait a little more in app start up but
+it will be extremely fast during execution.
+
+
+8) When I open big tables several times during app execution doesn't this lead to
+out of memory or very slow opening of that table?
+
+Adordd builds each table recordset only once. 
+If your table recordsets have million of records you will need enough memory for it and it can easily
+reach some hundred MB or more.
+When you open that table again the memory consumption its minimum as adordd clones that table set, which
+means a kind of pointer to previous open recordset being extremely fast opening it again and very 
+low on memory use.
+
+
+9) Can I use other SQL classes or function like adofuncs with adordd ?
+
+Yes.
+You can use the traditional navigational approach like clipper or SQL approach with INSERT, UPDATE, etc or a mix of both.
+Adordd will have always the table recordset updated with table last version no matter if for ex updates are made
+through functions or SQL statments through adordd or any other classes or functions.
+
+
+10) But aren't there any restrictions using adordd and don't I need have to change any of my app code?
+
+No restrictions.
+No app change code.It works like any other dbf kind of rdd.
+
+
+11) Is it fast like my dbf rdd application?
+
+Its not so fast as dbf kind of rdd if your app has only 1 to 5 users but almost as fast.
+The point is that adordd will not have performance degradation if your app works with 5 or 300 users 
+and neither on LAN or WAN as opposite to dbf rdd.
+
+Adordd will need minimum working load on your SQL engine server.
+
+
+12) Does it has transaction control ?
+
+It has everything your SQL engine might offer.
+If your chosen SQl engine is Transactional you will have transactions control in adordd.
+
+
+13) What SQL engines can I use ?
+
+ADS
+ACCESS
+ANYWHERE
+DBASE
+POSTGRE
+FIREBIRD
+FOXPRO
+INFORMIX
+MSSQL
+MYSQL
+ORACLE
+POSTGRE
+SQLITE
+
+But others can be easily added to be supported.
+
+
+14) What about if MS stops development or support to MS ADO in future?
+
+Adordd its prepared to work with any other user class that provides the few methods and data 
+adordd uses from MS ADO.
+This class could use arrays or dbfs as recordsets and interface through C to each SQL library bypassing
+ODBC which might be much faster.
