@@ -191,3 +191,44 @@ Solution:
 
 must link tryadordd.prg with addorrd.prg, and not use hbusrrdd.ch from adordd repository (rename it or delete 
 of your project, HB has your own hbusrrdd.ch in HB32dev\include)
+
+16) I try to upload with hb_AdoUpload() however some tables with a couple of million of records take an eternity to 
+be uploaded. Its impossible!
+
+
+Solution:
+In this case you have to upload these tables with some other tool.
+Please try this:
+
+CODE: SELECT ALL  EXPAND VIEW
+
+//assuming that default rdd is adordd.
+
+afiles //files to be uploaded from some folder
+
+for n:= 1 to len( afiles )
+    use afiles[n] VIA "DBFCDX" // might be another like ADS
+
+    if lastrec() > ?? //your threshold
+       //to avoid overwrite existing tables you must check before if table exists
+       copy to sqltable while recno() < 1  //creates empty table at SQL 
+       copy to cFileNoExt( afiles[n] )+".csv" while !eof() DELIMITED WITH <your delimiter>  //all your data exported
+
+    else
+       copy to sqltable while !eof() // other smaller tables are exported directly
+
+    endif
+
+next
+ 
+
+
+This should be pretty fast!
+
+After running this you will have all your tables uploaded to SQL engine.
+The tables within your threshold will be empty (only structure has been created) and you'll have all exported data 
+in tablename.csv file name.
+
+Now you must find a way through some other available tool to rapidly import data from each .csv file name 
+into each SQL table.
+Every SQL engine has some tool to do this job.
