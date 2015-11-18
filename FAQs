@@ -184,3 +184,9 @@ Adordd its prepared to work with any other user class that provides the few meth
 adordd uses from MS ADO.
 This class could use arrays or dbfs as recordsets and interface through C to each SQL library bypassing
 ODBC which might be much faster.
+
+15) How do I solve error Called from UR_SUPER_ADDFIELD(0) ?
+
+Solution:
+
+must link tryadordd.prg with addorrd.prg, and not use hbusrrdd.ch from adordd repository (rename it or delete of your project, HB has your own hbusrrdd.ch in HB32dev\include)
