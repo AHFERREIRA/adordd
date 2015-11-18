@@ -232,3 +232,12 @@ in tablename.csv file name.
 Now you must find a way through some other available tool to rapidly import data from each .csv file name 
 into each SQL table.
 Every SQL engine has some tool to do this job.
+
+17) adordd its not closing the connection when exiting the app.
+
+Solution:
+
+ado_exit from adordd should be auto called when exiting the app however it seems
+that without QUIT command thats not true in some conditions.
+If you want to close all tables,sets and connection place before exiting in your app a call
+to ADODB_CLOSE()
