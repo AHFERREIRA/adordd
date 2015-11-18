@@ -189,4 +189,5 @@ ODBC which might be much faster.
 
 Solution:
 
-must link tryadordd.prg with addorrd.prg, and not use hbusrrdd.ch from adordd repository (rename it or delete of your project, HB has your own hbusrrdd.ch in HB32dev\include)
+must link tryadordd.prg with addorrd.prg, and not use hbusrrdd.ch from adordd repository (rename it or delete 
+of your project, HB has your own hbusrrdd.ch in HB32dev\include)
