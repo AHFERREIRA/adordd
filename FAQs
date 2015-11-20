@@ -241,3 +241,50 @@ ado_exit from adordd should be auto called when exiting the app however it seems
 that without QUIT command thats not true in some conditions.
 If you want to close all tables,sets and connection place before exiting in your app a call
 to ADODB_CLOSE()
+
+18) If I upload my tables with or without SET PATH ON and then I run my app from a different folder or set path
+where there aren't any files (tables, indexes etc) at all and adordd its not working.
+
+Solution:
+
+If you are running from a different folder where aren't any files function file() tests in your app become invalid 
+because this function only checks the file system for the file.
+If you keep the same folder and files you don't need to alter your app although these files are only there for 
+file() testing and since the files exist on SQL engine its ok.
+
+If for ex you do this:
+
+   if !file("mypath\myfile")
+      dbcreate( "mypath\myfile"...
+
+If that file gets deleted at the file system it will be created both at File System (fake empty file) 
+and at the SQL engine the true table file otherwise not.
+If does not exist at the file system and exists at SQL then adordd recreates the file at SQL without any warning!
+
+So changing to a folder where these file() tests are not working anymore you need to alter all the occurrences
+of File() to hb_AdoRddFile() in order to look first at SQL if file exists and if not then at File System.
+
+hb_AdoRddFile() detects if tables (table extension)  or indexes (index extension) and if other extension checks
+only file system for that file.
+So you only do a replace in all your prgs files File(..  BY  hb_AdoRddFile(.. keeping everything else exactly the same.
+
+So the ex:
+
+   if !file("mypath\myfile")
+      dbcreate( "mypath\myfile"...
+
+Its now working with SQL even if that file doesn't exist at file system.
+
+Temporary files (index, tables) you don't need to do anything because adordd creates fake files 
+at the file system as indicate in your app and at SQL engine so your app continues to work exactly the same.
+
+hb_AdoRddFile() will work with any other rdd so you can use it as a replacement for File() in any conditions.
+
+Besides this if you uploaded all your files with SET ADO PATH ON you need now to SET ADO ROOT PATH TO "NEW DRIVE PATH" INSTEAD OF "OLD DRIVE PATH" otherwise the compound table name "mypath_tablename" will not work anymore because adordd now tries to open "new_drive_path_tablename" that does not exist.
+
+If you uploaded tables with SET ADO PATH OFF you don't need to do nothing. 
+However please note that if you have the same table name in different folders uploading it like this 
+it will not be possible to have duplicated table names.
+
+This can be set dynamically at your app accordingly to the path set by your app code so that it can run from
+anywhere.
