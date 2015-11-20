@@ -1009,6 +1009,15 @@ STATIC FUNCTION ADO_RESYNC( nWA, oRs ) //22.08.15
 
 STATIC FUNCTION ADO_REQUERY( nWA , oRs )
  LOCAL IndexName := ( nWA )->( ORDNAME( 0 ) )
+ LOCAL n
+
+   FOR n := 1 TO 74
+       IF "ADO_REQUERY" $ PROCNAME( n ) // not recursive calls
+          RETURN NIL
+
+       ENDIF
+
+   NEXT
 
    oRs:Requery()
    //DO WE HAVE TO ACTIVATE AGAIN TO INDEX SORT OR FILTER ?
@@ -1028,13 +1037,13 @@ STATIC FUNCTION ADO_GOTO( nWA, nRecord )
             oClone := oRecordSet:Clone
             oClone:MoveFirst()
             oClone:Find(oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name+" = "+ALLTRIM(STR(nRecord,10,0)) )
-            IF ! oClone:Eof()
+            TRY
               oRecordSet:BookMark := oClone:BookMark
 
-            ELSE
+            CATCH
               oRecordSet:MoveLast()
               oRecordSet:MoveNext()
-            ENDIF
+            END
          ELSE
             IF oRecordSet:Supports(adIndex) .AND. oRecordSet:Supports(adSeek)
                oRecordSet:Index := oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name
@@ -1341,7 +1350,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
     NEXT
 
     IF ! EMPTY( aCols )
-       TRY
+       //TRY
           aLockInfo[ UR_LI_RECORD ] := ADORECCOUNT(nWA,oRs)+1 //GHOST NEXT RECORD TO BE LOCKED
           aLockInfo[ UR_LI_METHOD ] := DBLM_MULTIPLE
           aLockInfo[ UR_LI_RESULT ] := .F.
@@ -1371,31 +1380,34 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
 
           //I DONT KNOW ANY WORKAROUND TO THIS RESYNC DOESNT WORK!
           IF aWData[ WA_ENGINE ]== "SQLITE" .OR. aWData[ WA_ENGINE ]== "FIREBIRD" .OR.;
-             aWData[ WA_ENGINE ]== "POSTGRE" .OR. aWData[ WA_ENGINE ]== "ORACLE"
-              ADO_REQUERY( nWA , oRs )
-              ADO_GOTO( nWA, aLockInfo[ UR_LI_RECORD ] )
+             aWData[ WA_ENGINE ]== "ORACLE" .OR.  aWData[ WA_ENGINE ]== "POSTGRE"
+             ADO_REQUERY( nWA , oRs )
+             ADO_GOTO( nWA, aLockInfo[ UR_LI_RECORD ] )
 
-          ENDIF */
+          ELSE //FOR OTHER WE NEED TO UPDATE THE ARRAU F BOOKMARKS OURSELVES
 
-          IF  aWData[ WA_INDEXACTIVE ] > 0 .AND. !EMPTY( oRs:Filter )
-              //WITH FOR CONDITION NO RECORDS ARE ADDED ONLY REMOVED IN ADO_PUTVALUE
-              //WHEN FOR IS EVALUATED FALSE
-              IF EMPTY ( aWData[WA_INDEXFOR][aWData[ WA_INDEXACTIVE ]] )
-                 xBook := oRs:BookMark
-                 nDecimals := SET( _SET_DECIMALS, 0 )
-                 AADD( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]] ,{oRs:BookMark ,&( INDEXKEY( 0 ) ) } )
-                 SET( _SET_DECIMALS, nDecimals  )
-                 IF UPPER( SUBSTR( aWData[ WA_INDEXDESC ] [ aWData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
-                    ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
-                 ELSE
-                    ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] < y[ 2 ] } )
+             IF  aWData[ WA_INDEXACTIVE ] > 0 .AND. !EMPTY( oRs:Filter )
+                 //WITH FOR CONDITION NO RECORDS ARE ADDED ONLY REMOVED IN ADO_PUTVALUE
+                 //WHEN FOR IS EVALUATED FALSE
 
+                 IF EMPTY ( aWData[WA_INDEXFOR][aWData[ WA_INDEXACTIVE ]] )
+                    xBook := oRs:BookMark
+                    nDecimals := SET( _SET_DECIMALS, 0 )
+                    AADD( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]] ,{oRs:BookMark ,&( INDEXKEY( 0 ) ) } )
+                    SET( _SET_DECIMALS, nDecimals  )
+                    IF UPPER( SUBSTR( aWData[ WA_INDEXDESC ] [ aWData[ WA_INDEXACTIVE ] ],1 ,4 ) ) = "DESC"
+                       ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] > y[ 2 ] } )
+                    ELSE
+                       ASORT( aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]], NIL, NIL, { |x,y| x[ 2 ] < y[ 2 ] } )
+
+                    ENDIF
+
+                    aBookMarks := aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]]
+                    aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
+                    oRs:Filter := aBookMarks
+                    oRs:BookMark := xBook
                  ENDIF
 
-                 aBookMarks := aWData[ WA_ABOOKMARKS ][aWData[ WA_INDEXACTIVE ]]
-                 aBookMarks := ARRTRANSPOSE( aBookMarks )[ 1 ]
-                 oRs:Filter := aBookMarks
-                 oRs:BookMark := xBook
               ENDIF
 
           ENDIF
@@ -1407,7 +1419,7 @@ STATIC FUNCTION ADO_APPEND( nWA, lUnLockAll )
           NETERR(.F.)
           aWData[ WA_RECCOUNT ] := aLockInfo[ UR_LI_RECORD ]
 
-       CATCH
+   /*    CATCH
           NETERR(.T.)
           ADOSHOWERROR( aWdata[WA_CONNECTION],  aWData[ WA_TABLENAME ] )
 
@@ -5135,6 +5147,7 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
    LOCAL lRet := .F.
    LOCAL oRs := ADOCLASSNEW( "ADODB.Recordset" )//TOleAuto():New( "ADODB.Recordset" )
+   LOCAL dbEngine := ADODEFAULTS()[3]
 
    IF !ADOCON_CHECK()
       RETURN HB_FAILURE
@@ -5161,9 +5174,30 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
    //FROM FW_ADOCREATETABLE
    IF ! EMPTY( cTable )
       TRY
-          oRs      := oCn:OpenSchema( adSchemaTables, { nil, nil, cTable, "TABLE" } )
-          lRet   := !( oRs:Bof .and. oRs:Eof )
-          oRs:Close()
+          DO CASE
+             CASE dbEngine = "SQLITE"
+                  oRs:Open( "SELECT name FROM sqlite_master WHERE type='table' AND name='"+cTable+"';" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+             CASE dbEngine = "FIREBIRD"
+                  oRs:Open("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = '"+;
+                          cTable+"' AND (rdb$view_blr IS NULL)" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+             CASE dbEngine = "ORACLE"
+                  oRs:Open("select table_name from user_tables where table_name = '"+cTable+"';" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+
+             OTHERWISE
+                   oRs      := oCn:OpenSchema( adSchemaTables, { nil, nil, cTable, "TABLE" } )
+                   lRet   := !( oRs:Bof .and. oRs:Eof )
+                   oRs:Close()
+
+         ENDCASE
 
       CATCH
           // Older ADO version not supporting second parameter
@@ -5197,13 +5231,35 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
 
    IF ! EMPTY( cIndex ) .AND. ! EMPTY(cTable)
       TRY
-         //MAYBE IT COMES WITH FILE EXTENSION AND PATH
-         cIndex := CFILENOPATH(cIndex)
-         cIndex := UPPER(CFILENOEXT(cIndex))
+          DO CASE
+             CASE dbEngine = "SQLITE"
+                  oRs:Open( "SELECT name FROM sqlite_master WHERE type='index' AND name='"+cIndex+"';" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
 
-         oRs      := oCn:OpenSchema( adSchemaIndexes, { nil, nil, cIndex, nil, cTable } )
-         lRet   := !( oRs:Bof .and. oRs:Eof )
-         oRs:Close()
+             CASE dbEngine = "FIREBIRD"
+                  oRs:Open("SELECT DB$INDEX_NAME FROM RDB$INDICES WHERE RDB$RELATION_NAME = '"+;
+                          cTable+"' AND DB$INDEX_NAME ='"+cIndex+"'" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+             CASE dbEngine = "ORACLE"
+                  oRs:Open("SELECT index_name FROM user_indexes WHERE index_name = '"+cIndex+"';" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+
+             OTHERWISE
+
+                  //MAYBE IT COMES WITH FILE EXTENSION AND PATH
+                  cIndex := CFILENOPATH(cIndex)
+                  cIndex := UPPER(CFILENOEXT(cIndex))
+
+                  oRs      := oCn:OpenSchema( adSchemaIndexes, { nil, nil, cIndex, nil, cTable } )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
+
+         ENDCASE
 
       CATCH
           // OpenSchema(adSchemaTables) is not supported by provider
@@ -5217,16 +5273,36 @@ STATIC FUNCTION ADOFILE( oCn, cTable, cIndex, cView)
    //19.06.15 views
    IF ! EMPTY( cView )
       TRY
-         oRs:Open(" SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS ",oCn)
+        DO CASE
+             CASE dbEngine = "SQLITE"
+                  oRs:Open( "SELECT name FROM sqlite_master WHERE type='view' AND name='"+cView+"';" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
 
-         IF ! oRs:Eof()
-            oRs:Filter  := "TABLE_NAME = '" + cView+"'"
-            lRet   := !( oRs:Bof .and. oRs:Eof )
-         ENDIF
+             CASE dbEngine = "FIREBIRD"
+                  oRs:Open("SELECT RDB$RELATION_NAME FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = '"+;
+                           cView+"' AND (rdb$view_blr IS NOT NULL)" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
 
-         oRs:Close()
+             CASE dbEngine = "ORACLE"
+                  oRs:Open("SELECT view_name FROM user_views WHERE view_name = '"+cView+"'" )
+                  lRet   := !( oRs:Bof .and. oRs:Eof )
+                  oRs:Close()
 
-      CATCH
+             OTHERWISE
+
+                  oRs:Open(" SELECT TABLE_NAME FROM INFORMATION_SCHEMA.VIEWS ",oCn)
+
+                  IF ! oRs:Eof()
+                     oRs:Filter  := "TABLE_NAME = '" + cView+"'"
+                     lRet   := !( oRs:Bof .and. oRs:Eof )
+                  ENDIF
+
+                  oRs:Close()
+         ENDCASE
+
+     CATCH
          // OpenSchema(adSchemaViews) is not supported by provider
          // we do not know if the table exists
          ADOSHOWERROR( oCn, cView )  // Comment out in final release
@@ -6084,32 +6160,55 @@ FUNCTION hb_GetAdoConnection()//supply app the con object
 
 
 FUNCTION hb_AdoRddFile( cFile )
- LOCAL aDbExt := { "DBF", "DBT", "FTP", "ADT", "ADM", "ADI", "IDX", "CDX", "NTX", "NDX"}
- LOCAL lRetval := .F., n
+ LOCAL aDbExt := { "DBF", "DBT", "FPT", "SMT", "ADT", "ADM", "ADI", "IDX", "CDX", "NTX", "NDX"}
+ LOCAL lRetval := .F., n, y, z
+ LOCAL aFiles := ListDbfIndex()
+ LOCAL aTmpIndx := ListTmpIndex()
 
-  n := ASCAN( aDbExt, UPPER( CFILEEXT( cFile ) ) )
+  IF RDDSETDEFAULT() == "ADORDD"
+     IF !EMPTY( UPPER( CFILEEXT( cFile ) ) )
+        n := ASCAN( aDbExt, UPPER( CFILEEXT( cFile ) ) )
 
-  IF n > 0  .AND. RDDSETDEFAULT() == "ADORDD" //LOOK FOR DATABASE FILES
-     IF n < 6  //TABLES
-       lRetVal := ADOFILE(hb_GetAdoConnection(), cFile  )
-
-     ELSE //INDEXES
-        lRetVal := ADOFILE(hb_GetAdoConnection(), NIL,  cFile  )
-
-     ENDIF
-
-  ELSE //LOOK FOR FILE SYSTEM FILES
-     IF  RDDSETDEFAULT() == "ADORDD"
-         lRetVal := ADOFILE(hb_GetAdoConnection(), NIL, NIL, cFile  ) //VIEWS
      ELSE
-        lRetval := .F.
+        n := 0
+
      ENDIF
-     IF !lRetval
-        lRetval := FILE( cFile ) //IS IT A NORMAL FILE
+
+     IF n > 0 .AND. n < 7  //TABLES
+        lRetVal := ADOFILE( hb_GetAdoConnection(), cFile  )
+
+     ELSEIF n >= 7 //INDEXES CONSIDERED AS NORMAL FILE CHECK AT SERVER USE INSTEAD hb_adoRddExistsTable
+        cFile := CFILENOPATH( cFile )
+        cFile := UPPER( CFILENOEXT( cFile ) )
+
+        FOR y :=1 TO LEN( aFiles )
+            FOR z :=1 TO LEN( aFiles[y]) -1
+                IF aFiles[y,z+1,1] == cFile
+                   lRetVal := .T.
+                   EXIT
+
+                ENDIF
+
+            NEXT
+        NEXT
+
+        IF ! lRetVal //temp indexes
+           lRetVal := ASCAN( aTmpIndx,{ | x | x == cFile } ) > 0
+
+        ENDIF
+
+     ELSE //ASSUME VIEW
+        lReVal = ADOFILE( hb_GetAdoConnection(), ,, cFile )
 
      ENDIF
 
   ENDIF
+
+  IF !lRetval //IS IT A NORMAL FILE
+     lRetval := FILE( cFile )
+
+  ENDIF
+
 
   RETURN lRetval
 
@@ -6547,7 +6646,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 161115"
+RETURN "AdoRdd Version 1.0 Build 201115"
 
 /*                   END ADO SET GET FUNCTONS */
 
