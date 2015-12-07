@@ -581,7 +581,7 @@ STATIC FUNCTION ADOOPENCONNECT( cDB, cServer, cEngine, cUser, cPass , oCn )
                          ";pwd=" + cPass ) )
 
      CASE cEngine == "ORACLE"
-          oCn:Open( "Provider=MSDAORA.1;" + ;
+         oCn:Open( "Provider=MSDAORA.1;" + ;
                     "Persist Security Info=False" + ;
                     iif( Empty( cServer ), ;
                         "", ";Data source=" + cServer ) + ;
@@ -1037,6 +1037,7 @@ STATIC FUNCTION ADO_RESYNC( nWA, oRs ) //22.08.15
 STATIC FUNCTION ADO_REQUERY( nWA , oRs )
  LOCAL IndexName := ( nWA )->( ORDNAME( 0 ) )
  LOCAL n
+ LOCAL aWAData := USRRDD_AREADATA( nWA )
 
    FOR n := 1 TO 74
        IF "ADO_REQUERY" $ PROCNAME( n ) // not recursive calls
@@ -1047,6 +1048,8 @@ STATIC FUNCTION ADO_REQUERY( nWA , oRs )
    NEXT
 
    oRs:Requery()
+   aWAData[ WA_RECCOUNT ] := ADORECCOUNT( nWA, oRs )
+   aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
    //DO WE HAVE TO ACTIVATE AGAIN TO INDEX SORT OR FILTER ?
    (nWA)->( ORDSETFOCUS( IndexName ) )
 
@@ -2209,8 +2212,8 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
       cType    := 'D'
       nLen     := 8
 
-      IF oRs != nil .AND. ! oRs:Eof() .AND. ! oRs:Bof() .AND. VALTYPE( uVal := oField:Value ) == 'T'
-         //.AND. FW_TIMEPART( uVal ) >= 1.0 WHERE IS THIS FUNCTION?
+      IF oRs != nil .AND. ! oRs:Eof() .AND. ! oRs:Bof() .AND. VALTYPE( uVal := oField:Value ) == 'T';
+         .AND. FW_TIMEPART( uVal ) >= 1.0
          cType      := 'T'
          nDBFFieldType := HB_FT_TIMESTAMP // DONT KNWO IF IT IS CORRECT!
       ELSE
@@ -2221,7 +2224,10 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
                   adUnsignedTinyInt, adUnsignedSmallInt, adUnsignedInt, ;
                   adUnsignedBigInt }, nType ) > 0
       cType    := 'N'
-      nLen     := oField:Precision //+ 1  // added 1 for - symbol
+      nLen := ADO_GET_NUMFIELDLEN( aWAData[ WA_TABLEINDEX ], oField:Name )
+      IF nLen = 0
+         nLen     := oField:Precision-1 //ADDS EXRA 1 IN ADOCREATE //+ 1  // added 1 for - symbol
+      ENDIF
       nDBFFieldType := HB_FT_INTEGER
 
       TRY
@@ -2248,7 +2254,10 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
 
    ELSEIF ASCAN( { adSingle, adDouble }, nType ) > 0
       cType    := 'N'
-      nLen     := Min( 19, oField:Precision  ) //Max( 19, oField:Precision + 2 )
+      nLen := ADO_GET_NUMFIELDLEN( aWAData[ WA_TABLEINDEX ], oField:Name )
+      IF nLen = 0
+         nLen     := Min( 19, oField:Precision -1  ) //ADDS EXRA 1 IN ADOCREATE//Max( 19, oField:Precision + 2 )
+      ENDIF
       nDBFFieldType := HB_FT_DOUBLE
       nDec  := 2
 
@@ -2262,13 +2271,19 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
 
    ELSEIF ASCAN( { adCurrency }, nType ) > 0
       cType    := 'N'      // 'Y'
-      nLen     := Min( 19, oField:Precision  )  //19
+      nLen := ADO_GET_NUMFIELDLEN( aWAData[ WA_TABLEINDEX ], oField:Name )
+      IF nLen = 0
+         nLen     := Min( 19, oField:Precision -1  ) //ADDS EXRA 1 IN ADOCREATE//Max( 19, oField:Precision + 2 )
+      ENDIF
       nDec     := 2
       nDBFFieldType :=  HB_FT_DOUBLE
 
    ELSEIF ASCAN( { adDecimal, adNumeric, adVarNumeric }, nType ) > 0
       cType    := 'N'
-      nLen     :=  Min( 19, oField:Precision  ) //Max( 19, oField:Precision + 2 )
+      nLen := ADO_GET_NUMFIELDLEN( aWAData[ WA_TABLEINDEX ], oField:Name )
+      IF nLen = 0
+         nLen     := Min( 19, oField:Precision -1 ) //ADDS EXRA 1 IN ADOCREATE//Max( 19, oField:Precision + 2 )
+      ENDIF
       nDBFFieldType := HB_FT_INTEGER
 
       IF oField:NumericScale > 0 .AND. oField:NumericScale < nLen
@@ -2375,6 +2390,35 @@ STATIC FUNCTION ADO_IS_FIELD_LOGICAL( cTable, oField )
 
 
    RETURN lExist
+
+
+STATIC FUNCTION ADO_GET_NUMFIELDLEN( cTablename , cField )
+ LOCAL nLen := 0, y, z
+ LOCAL aFiles := ListFNumberIndex( )
+
+  cField := UPPER( cField )
+
+  y:=ASCAN( aFiles, { |z| z[1] == cTablename } )
+  //CASE TABLES HAVE A COMPOUNF NAME EX NAME+USERNR = USER 1 NAME1, USER 2 NAME2
+  // IN SET ADODBF FIELDNUM THSE CASES MUST PLACED ONY THE NAME
+  IF y = 0
+     y := ASCAN( aFiles, { |z| z[1] == SUBSTR( cTablename, 1 , LEN( z[ 1 ] ) ) } )
+
+  ENDIF
+
+  IF y >0
+     FOR z :=1 TO LEN( aFiles[y]) -1
+         IF aFiles[y,z+1,1] == cField
+            nLen:=aFiles[y,z+1,2]
+            EXIT
+
+         ENDIF
+
+     NEXT
+
+  ENDIF
+
+  RETURN nLen
 
 
 STATIC FUNCTION ADO_GET_FIELD_DECIMAL( cTable, oField )
@@ -2638,6 +2682,12 @@ STATIC FUNCTION ADO_ORDINFO( nWA, nIndex, aOrderInfo )
    CASE nIndex == DBOI_POSITION
         IF aWAData[ WA_CONNECTION ]:State != adStateClosed
            aOrderInfo[ UR_ORI_RESULT ] := oRecordSet:AbsolutePosition()  //22.08.15 WAS THIS A BUG ? +1
+
+           IF VALTYPE( aOrderInfo[ UR_ORI_NEWVAL ] ) == "N" .AND.aOrderInfo[ UR_ORI_NEWVAL ] > 0 ;
+              .AND. aOrderInfo[ UR_ORI_NEWVAL ] <= oRecordSet:RecordCount
+              oRecordSet:AbsolutePosition :=  aOrderInfo[ UR_ORI_NEWVAL ]
+
+           ENDIF
 
         ELSE
            aOrderInfo[ UR_ORI_RESULT ] := 0
@@ -3243,6 +3293,21 @@ STATIC FUNCTION ADOUDFINDEX( nWa, xExpression, xCondition, lUnique, lDesc, bEval
    IF ! EMPTY( xCondition ) .OR. ! EMPTY( xWhile )
       lRetVal = .T.
 
+   ENDIF
+
+   IF VALTYPE( xExpression ) = "B"
+      bIndexExprn := xExpression
+
+   ELSE
+      bIndexExprn := &("{ || " + xExpression + "}")
+
+   ENDIF
+
+   //IF NUM WE HAVE TO CONSIDERED AS UDF AS WE HAVE NO WAY TO EXTRACT
+   //FIELD LENS TO BUILD EXPRESSION BECAUSE THE INDEX EXPRESSION WILL
+   //BE TE SUM RESULT OF THE NUMERIC FIELDS IN THE EXRESSION
+   IF VALTYPE( EVAL( bIndexExprn ) ) == "N"
+      lRetval := .T.
    ENDIF
 
    IF lRetVal //.OR. PROCNAME( 1 ) = "ADO_ORDCREATE"
@@ -3896,12 +3961,18 @@ STATIC FUNCTION ADO_FLUSH( nWA )
 
 FUNCTION ADOBEGINTRANS(nWa)
 
- LOCAL oCon := hb_adoRddGetConnection( nWA )
+ LOCAL oCon
 
- IF !ADOCON_CHECK()
-     RETURN HB_FAILURE
+  IF !ADOCON_CHECK()
+      RETURN HB_FAILURE
 
- ENDIF
+  ENDIF
+
+  IF !EMPTY( nWA )
+     oCon := hb_adoRddGetConnection( nWA )
+  ENDIF
+
+  DEFAULT oCon TO oConnection
 
   TRY
      oCon:BeginTrans()
@@ -3936,23 +4007,33 @@ FUNCTION ADOCOMMITTRANS(nWa)
 
 FUNCTION ADOROLLBACKTRANS(nWa)
 
- LOCAL oCon := hb_adoRddGetConnection( nWA )
- LOCAL n,oRs //, aWAData
+ LOCAL oCon, n,oRs
 
    IF !ADOCON_CHECK()
       RETURN HB_FAILURE
 
    ENDIF
 
-  TRY
-     oCon:RollBackTrans()
+   TRY
+     IF !EMPTY( nWA )
+        oCon := hb_adoRddGetConnection( nWA )
+        oCon:RollBackTrans()
+
+     ENDIF
 
      //UPDATE ALL RECORDSETS TO CLEAN THE CANCELED TRANSACTION FROM RECORDSETS
      FOR n := 1 TO 255
+         IF EMPTY( nWA )
+            TRY
+                oCon := hb_adoRddGetConnection( n )
+                oCon:RollBackTrans()
+            CATCH //IF ANY INACTIVE GETS HERE AND CONTINUES
+            END
+         ENDIF
          oRs := hb_adoRddGetRecordSet(n)
          IF VALTYPE(oRs) = "O"
-            ADO_REFRESH( nWA, .T. )
-//            aWAData := USRRDD_AREADATA( n )
+            ADO_REQUERY( n, oRs )
+
          ENDIF
 
      NEXT
@@ -4265,7 +4346,7 @@ STATIC FUNCTION ADOPSEUDOSEEK(nWA,cKey,aWAData,lSoftSeek,lBetween,cKeybottom, lO
         cType := FIELDTYPE(FIELDPOS(aFields[nAt,1]))
 
         //extract from cKey the lengh og this field
-        IF cType = "C" .OR. cType = "M"
+        IF cType = "C" .OR. cType = "M" .OR. cType = "T"
            IF !lBetween
               IF !lSoftSeek
                  cExpression += aFields[nAt,1]+ "="+"'"+SUBSTR( cKey, 1, nLen)+"'"
@@ -6230,7 +6311,7 @@ FUNCTION hb_AdoRddFile( cFile )
         ENDIF
 
      ELSE //ASSUME VIEW
-        lReVal = ADOFILE( hb_GetAdoConnection(), ,, cFile )
+        lRetVal = ADOFILE( hb_GetAdoConnection(), ,, cFile )
 
      ENDIF
 
@@ -6428,6 +6509,18 @@ FUNCTION ListDbfIndex( aList )
 
   RETURN AClipper_fic
 
+// array with tables and numeric fields use in index expressions
+// where adordd needs to lnow exact len of those fields
+// Only needed for numeric field present in index expressions
+FUNCTION ListFNumberIndex( aList )
+ STATIC ANum_fic
+
+   IF !EMPTY(aList)
+      ANum_fic := aList
+
+   ENDIF
+
+  RETURN ANum_fic
 
 // field name autoinc to use as recno per each table {{"CTABLE","CFIELDNAME"} }
 FUNCTION ListFieldRecno( aList )
@@ -6680,7 +6773,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 261115"
+RETURN "AdoRdd Version 1.0 Build 071215"
 
 /*                   END ADO SET GET FUNCTONS */
 
@@ -6758,6 +6851,22 @@ HB_FUNC( FW_DTOT )
    hb_partdt( &lJulian, &lMilliSecs, 1 );
    hb_rettdt( lJulian, lMilliSecs );
 #endif
+}
+
+HB_FUNC( FW_TIMEPART )
+{
+
+#ifdef __XHARBOUR__
+   hb_retnd( 0.001 * ( double ) hb_part( 1 ) );
+#else
+   long lJulian;
+   long lMilliSecs;
+
+   hb_partdt( &lJulian, &lMilliSecs, 1 );
+   hb_retnd( 0.001 * ( double ) lMilliSecs );
+
+#endif
+
 }
 
 #pragma ENDDUMP
