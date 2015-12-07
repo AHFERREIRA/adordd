@@ -19,19 +19,30 @@
 
     //index related sets
     SET ADODBF TABLES INDEX LIST TO {  {"TABLE1",{"FIRST","FIRST"} }, {"TABLE2" ,{"CODID","CODID"}} }
-    //if egne does not support logical fields indicate tehm here
+
+    //if engine does not support logical fields indicate tehm here
     //SET ADO TABLES LOGICAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD" } }}
+
+    // IF ENGINE DOES NTO SUPPORT PRECCISE INDICATION OF DECIMALS LIKNE MONEY, ETC PUT THEM HERE
     //SET ADO TABLES DECIMAL FIELDS LIST TO  { { "TABLE1", { "SOMEFIELD",4,"ANOTHERFILED", 6 } }}
+
+    // defining numeric field len used in index expressions WITHOUT PRECISE LEN NOTATION IN SQL TABEL
+    //SET ADODBF INDEX LIST FIELDTYPE NUMBER TO
+
+
     SET ADO TEMPORAY NAMES INDEX LIST TO {"TMP","TEMP"}
+
     //these should be considered as UDF as they must either be evaluated in clipper way or
     //change the value of the uderlying data
     SET ADO INDEX UDFS TO {"IF","&","SUBSTR","=="}
 
     //field recno and deleted related sets
     SET ADO DEFAULT RECNO FIELD TO "HBRECNO"
+
     //only needed for tables with diferent from the default
     //SET ADO FIELDRECNO TABLES LIST TO {{"TABLE1","????"},{"TABLE2","????"}}
     SET ADO DEFAULT DELETED FIELD TO "HBDELETE"
+
     //only needed for tables with diferent from the default
     //SET ADO FIELDDELETED TABLES LIST TO {{"TABLE1","?????"},{"TABLE2","???"} }
 
@@ -39,6 +50,7 @@
     //CONTROL LOCKING IN ADORDD FOR BOTH TABLE AND RECORD DONT PUT FINAL "\"
     //uncomenet a place folder if lock set on
     //SET ADO LOCK CONTROL SHAREPATH TO  "C:\TEMP" RDD TO "DBFCDX"
+
     SET ADO FORCE LOCK OFF
 
     //TABLE NAMES RELATED SETS
