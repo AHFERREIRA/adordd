@@ -260,6 +260,7 @@
 /* sets for adordd */
 //NOT NEEDED ANYMORE #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
+#command SET ADODBF INDEX LIST FIELDTYPE NUMBER TO <array>  => ListFNumberIndex( <array>) /* defining numeric field len used in index expressions */
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
