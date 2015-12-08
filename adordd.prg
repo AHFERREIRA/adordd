@@ -1883,7 +1883,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
       IF aStruct[6]
          IF aStruct[2] = "N" .AND. !VALTYPE( xValue ) = "L"
-            IF LEN(CVALTOCHAR(xValue)) > FIELDLEN( nField )
+            IF LEN( ALLTRIM( CVALTOCHAR( xValue ) ) ) > FIELDLEN( nField )
                //round to the numericscale
                xValue := ROUND(xValue, FIELDDEC( nField ))
 
@@ -2226,7 +2226,9 @@ STATIC FUNCTION ADO_FIELDSTRUCT( oRs, n, nWA ) // ( oRs, nFld ) where nFld is 1 
       cType    := 'N'
       nLen := ADO_GET_NUMFIELDLEN( aWAData[ WA_TABLEINDEX ], oField:Name )
       IF nLen = 0
-         nLen     := oField:Precision-1 //ADDS EXRA 1 IN ADOCREATE //+ 1  // added 1 for - symbol
+         nLen     := oField:Precision //-1 //ADDS EXRA 1 IN ADOCREATE //+ 1  // added 1 for - symbol
+         //SQL engines always add the - or + sign so it alwasy return the correct precision 10
+         //although in sql structire is 11 in spite of what was defined when create the table
       ENDIF
       nDBFFieldType := HB_FT_INTEGER
 
@@ -5015,8 +5017,9 @@ STATIC FUNCTION ADOSTRUCTTOSQL( aWAData,aStruct ,lAddAutoInc)
                   ELSEIF dbEngine == "FIREBIRD"
                      IF aStruct[ nCol,3 ] >= 18  //MAX IN FIREBIRD
                         aStruct[ nCol,3 ] := 17
-                        c := LTrim( Str( aStruct[ nCol,3 ] + 1 ) ) + ", " + LTrim( Str( aStruct[ nCol,4 ] ) )
                      ENDIF
+                     c := LTrim( Str( aStruct[ nCol,3 ] + 1 ) ) + ", " + LTrim( Str( aStruct[ nCol,4 ] ) )
+
                      IF aStruct[ nCol,4 ] == 0
                         cSql  += IF( aStruct[ nCol,3 ] <= 2, " SMALLINT", IF( aStruct[ nCol,3 ] <= 4, " SMALLINT", ;
                               IF( aStruct[ nCol,3 ] <= 9, " INTEGER", " INTEGER" ) ) )
@@ -6773,7 +6776,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.0 Build 071215"
+RETURN "AdoRdd Version 1.0 Build 081215"
 
 /*                   END ADO SET GET FUNCTONS */
 
