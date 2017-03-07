@@ -259,22 +259,44 @@
 
 /* sets for adordd */
 //NOT NEEDED ANYMORE #command SET ADO TABLES INDEX LIST TO <array>  => ListIndex( <array>) /* defining index array list */
+
 #command SET ADODBF TABLES INDEX LIST TO <array>  => ListDbfIndex( <array>) /* defining index array list with clipper expressions */
+
+#command SET ADODBF MULTIBAG INDEX LIST TO <array>  => ListMultibagfIndex( <array>) /* defining index array list for all compound indexes */
+
 #command SET ADODBF INDEX LIST FIELDTYPE NUMBER TO <array>  => ListFNumberIndex( <array>) /* defining numeric field len used in index expressions */
+
 #command SET ADO TEMPORAY NAMES INDEX LIST TO <array>  => ListTmpNames( <array>) /* defining temporary index array list of names*/
+
 #command SET ADO FIELDRECNO TABLES LIST TO <array>  => ListFieldRecno( <array>) /* defining temporary index array list of names*/
+
 #command SET ADO DEFAULT RECNO FIELD TO <cname>  => ADODEFLDRECNO( <cname> ) /* defining the default name for id recno autoinc*/
-#command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> ENGINE TO <cEngine> [USER TO <cUser>];
-  [PASSWORD TO <cPass>] [CLASSNAME <cClass>]=> ADODEFAULTS( <cDB>, <cServer>, <cEngine>, <cUser>, <cPass>, <cClass>,.F.) /* defining the defaults for ado open and create*/
+
+#command SET ADO DEFAULT DATABASE TO <cDB> SERVER TO <cServer> [PORT TO <cPort>] ENGINE TO <cEngine> [USER TO <cUser>];
+  [PASSWORD TO <cPass>] [CLASSNAME <cClass>]=> ADODEFAULTS( <cDB>, <cServer>, <cPort>, <cEngine>, <cUser>, <cPass>, <cClass>,.F.) /* defining the defaults for ado open and create*/
+
 #command SET ADO LOCK CONTROL SHAREPATH TO <cPath> RDD TO <cRdd> => ADOLOCKCONTROL( <cPath>, <cRdd> ) /* defines path for table for record lock control D:\PATH */
+
 #command SET ADO FORCE LOCK <x:ON,OFF>  => ADOFORCELOCKS( Upper( <(x)> ) == "ON" ) /* ADO locks files and records ?*/
+
 #command SET ADO INDEX UDFS TO <array> => ListUdfs( <array> )
+
 #command SET ADO DEFAULT DELETED FIELD TO <cname>  => ADODEFLDDELETED( <cname> ) /* defining the default name for DELETED field*/
+
 #command SET ADO FIELDDELETED TABLES LIST TO <array>  => ListFieldDeleted( <array>) /* defining temporary Delete array list of names*/
+
 #command SET ADO TABLES LOGICAL FIELDS LIST TO <array>  => ListFieldLogical( <array>) /* defining logical field array list of names*/
+
 #command SET ADO TABLES DECIMAL FIELDS LIST TO <array>  => ListFieldDecimal( <array>) /* defining decimals by field array list of names*/
+
 #command SET ADO TABLENAME WITH PATH <x:ON,OFF> => ADOTABLEWITHPATH( Upper( <(x)> ) == "ON" ) /* table name = path_tablename instead of only tablename */
+
 #command SET ADO CACHESIZE TO <nCache> ASYNC <x:ON,OFF> ASYNCNOWAIT <y:ON,OFF> => ADOPARAMETERS( <nCache>, Upper( <(x)> ) == "ON", Upper( <(y)> ) == "ON" )
+
 #command SET ADO PRE OPEN THRESHOLD TO <nRecords> [ MASK <aMask> ] => ADOPREOPENTHRESHOLD( <nRecords>, <aMask> )
+
 #command SET ADO ROOT PATH TO <cNewPath> INSTEAD OF <cOldPath> => ADOROOTPATH( <cNewPath>, <cOldPath> )
+
+#command SET RECORDSET OPEN WHERE CLAUSE TO <array> => ListTableQuery( <array> )  /*query to use when open each mentioned table*/
+
 #endif
