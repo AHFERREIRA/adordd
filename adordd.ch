@@ -115,6 +115,7 @@
 #define adUseClient                     3
 #define adUseClientBatch                3
 
+
 #define adKeyForeign                    2
 
 /* Constant Group: ObjectStateEnum */
@@ -243,6 +244,11 @@
 
 /*Field Staus */
 #define adFieldPendingChange      4 /* Indicates either that the field has been deleted and then re-added, perhaps with a different data type, or that the value of the field which previously had a status of adFieldOK has changed. The final form of the field will modify the Fields collection after the Update method is called./*
+
+/*Save PersistFormatEnum */
+#define adPersistADTG             0  /*This value indicates Microsoft Advanced Data TableGram (ADTG) format.*/
+#define adPersistXML              1  /* This value indicates Extensible Markup Language (XML) format. */
+
 
 
 //YOU CAN ALSO USE CTABLE@CON STRING
