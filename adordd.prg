@@ -4396,24 +4396,24 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
          IF lSoftSeek
             IF !lFindLast
                nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                       {|x|  IF( VALTYPE( x[ 2 ] )= "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
-                                x[ 2 ] = cKey   )} )
+                       {|x|  IF( VALTYPE( x[ 2 ] )= "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) = CVALTOCHAR( cKey ) ,;
+                                x[ 2 ] = cKey )  } )
 
                IF nPos = 0
                   nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                         {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) > cKey ,;
+                         {|x|  IF( VALTYPE( x[ 2 ]) = "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) > CVALTOCHAR( cKey ),;
                                 x[ 2 ] > cKey   )} )
 
                ENDIF
 
             ELSE
-               nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                         {|x|   x[ 2 ] = cKey  } )
-                       {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+               nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//  {|x|   x[ 2 ] = cKey  } )
+                       {|x|  IF( VALTYPE( x[ 2 ]) = "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) = CVALTOCHAR( cKey ),;
                                 x[ 2 ] = cKey   )} )
 
                IF nPos = 0
                   nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;
-                         {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) < cKey ,;
+                         {|x|  IF( VALTYPE( x[ 2 ]) = "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) < CVALTOCHAR( cKey ),;
                                 x[ 2 ] < cKey   )} )
 
                ENDIF
@@ -4423,11 +4423,11 @@ STATIC FUNCTION ADO_SEEK( nWA, lSoftSeek, cKey, lFindLast )
          ELSE
             IF !lFindLast
                nPos := ASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                        {|x|   x[ 2 ] = cKey  } )
-                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) = CVALTOCHAR( cKey ),;
                                 x[ 2 ] = cKey   )} )
             ELSE
                nPos := RASCAN( aWAData[ WA_ABOOKMARKS ][aWAData[WA_INDEXACTIVE]],;//                     {|x|   x[ 2 ] = cKey  } )
-                     {|x|  IF( VALTYPE( x[ 2 ]) = "C",SUBSTR( x[ 2 ], 1, LEN( cKey ) ) = cKey ,;
+                     {|x|  IF( VALTYPE( x[ 2 ]) = "C", SUBSTR( x[ 2 ], 1, LEN( CVALTOCHAR( cKey ) ) ) = CVALTOCHAR( cKey ),;
                                 x[ 2 ] = cKey   )} )
 
             ENDIF
@@ -6115,14 +6115,20 @@ STATIC FUNCTION ADOLUPDATE(  aWAData  )
            dDate := oRs:Fields("last_user_update"):Value
            oRs:Close()
 
+     CASE  aWAData[ WA_ENGINE ] = "ORACLE"  //NOT TESTED!
+           oRs:Open( "select timestamp from user_tab_modifications where table_name ='" + aWAData[ WA_TABLENAME ]+"'" )
+           dDate := oRs:Fields("timestamp"):Value
+           oRs:Close()
+
       OTHERWISE
           dDate := CTOD( "31/12/1899" )
-          MSGINFO("You are requesting last date table update"+CRLF+;
+          MSGALERT("You are requesting last date table update"+CRLF+;
                   "Adordd does not support it yet to your Server!"+CRLF+;
-                  "Date returned is: "+ CTOD( dDate ) )
+                  "Date returned is: "+ DTOC( dDate ) )
 
   ENDCASE
-
+     
+  oRs := NIL
 
   RETURN dDate
 
@@ -7150,7 +7156,7 @@ FUNCTION  ADOWHERECLAUSE( nWa, cNewSql ) //changing records in recordset
 
 
 FUNCTION ADOVERSION()
-RETURN "AdoRdd Version 1.070317"
+RETURN "AdoRdd Version 1.020417"
 
 /*                   END ADO SET GET FUNCTONS */
 
