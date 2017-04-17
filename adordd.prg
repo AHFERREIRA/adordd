@@ -166,9 +166,8 @@ STATIC t_cQuery
 STATIC oConnection
 STATIC t_lAsync
 STATIC t_lAsyncNoWait
-STATIC t_nCacheSize
+STATIC t_nCacheSize := 10 //default nr records value for cached recordsets
 STATIC a_preopen := {}
-STATIC n_nrecords := 6000 //default nr records value for cached recordsets
 STATIC t_Port  //new
 
 
@@ -324,9 +323,8 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
       //PROPERIES AFFECTING PERFORMANCE TRY defaults
       t_lAsync := IF( EMPTY( t_lAsync ), .F., t_lAsync )
       t_lAsyncNoWait := IF( EMPTY( t_lAsyncNoWait ), .F., t_lAsyncNoWait )
-      t_nCacheSize  := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
 
-      oRecordSet:CacheSize :=  t_nCacheSize //records increase performance set zero returns error set great server parameters max open rows error
+      oRecordSet:CacheSize :=  IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize ) //records increase performance set zero returns error set great server parameters max open rows error
 
       oRecordSet:Open( "SELECT * FROM " + aWAData[ WA_TABLENAME ] + aWAData[ WA_QUERY ]+;
                   " ORDER BY "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] ) , aWAData[ WA_CONNECTION ]  ;
@@ -335,7 +333,7 @@ STATIC FUNCTION ADO_OPEN( nWA, aOpenInfo )
                   IF( t_lAsync, adAsyncFetch, adOptionUnspecified ) ) )
 
       //PUT IT IN THE "CACHE" FOR NEXT OPENING! DEFINED BY SET THRESHOLD
-      IF n_nrecords > 0 .AND. oRecordSet:RecordCount > n_nrecords //.OR. oRecordSet:Fields:Count > 200
+      IF t_nCacheSize > 0 .AND. oRecordSet:RecordCount > t_nCacheSize//.OR. oRecordSet:Fields:Count > 200
          AADD( a_preopen, { aWAData [ WA_TABLENAME], oRecordSet, aWAData[ WA_QUERY ]} )
          oRecordSet := a_preopen[ LEN( a_preopen ), 2 ]:Clone
 
@@ -1263,11 +1261,11 @@ STATIC FUNCTION ADO_GOBOTTOM( nWA )
 
 STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
 
-  LOCAL aWAData   := USRRDD_AREADATA( nWA )
-  LOCAL oRecordSet := aWAData[ WA_RECORDSET ],lDeleted
-  LOCAL  nToSkip, nRet := HB_SUCCESS
+   LOCAL aWAData   := USRRDD_AREADATA( nWA )
+   LOCAL oRecordSet := aWAData[ WA_RECORDSET ],lDeleted
+   LOCAL  nToSkip, nRet := HB_SUCCESS
 
-  IF ADOEMPTYSET(oRecordSet)
+   IF ADOEMPTYSET(oRecordSet)
       nToSkip := 0
       IF ! Empty( aWAData[ WA_PENDINGREL ] )
          ADO_FORCEREL( nWA )
@@ -1312,11 +1310,11 @@ STATIC FUNCTION ADO_SKIPFILTER( nWA, nRecords )
 
 STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
 
-  LOCAL aWAData := USRRDD_AREADATA( nWA )
-  LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-  LOCAL nResult := HB_SUCCESS,nRecno
+   LOCAL aWAData := USRRDD_AREADATA( nWA )
+   LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
+   LOCAL nResult := HB_SUCCESS,nRecno
 
-  IF ADOEMPTYSET(oRecordSet)
+   IF ADOEMPTYSET(oRecordSet)
       nToSkip := 0
       RETURN HB_SUCCESS //SHOULDNET BE FAILURE?
 
@@ -3470,6 +3468,24 @@ STATIC FUNCTION ADO_ORDCREATE( nWA, aOrderCreateInfo )
 
    ENDIF
 
+   IF ! FILE( cFile ) 
+      //DOESNT EXIT ANYMORE DEL IT FROM THE ARRAY
+      //OTHERWISE IT WILL FIND THIS FIRST PROBABLY FOR ANOTHER TABLE
+      n := ASCAN( aTmpIndx, cIndex )
+      IF n > 0
+         ADEL( aTmpIndx, n, .T. )
+         ADEL( aTmpExp, n, .T. )
+         ADEL( aTmpFor, n, .T. )
+         ADEL( aTmpUnique, n, .T. )
+         ADEL( aTmpDbfExp, n, .T. )
+         ADEL( aTmpDbfFor, n, .T. )
+         ADEL( aTmpDbfUnique, n, .T. )
+         ADEL( aTmpDesc, n, .T. )
+         ADEL( aTmpBook, n, .T. )
+
+      ENDIF 
+
+   ENDIF
 
    //TMP FILES NOT PRESENT IN ListIndex
    IF ASCAN(aTempFiles,(UPPER(SUBSTR(cIndex,1,3)) )) > 0 .OR. ASCAN(aTempFiles,UPPER(SUBSTR(cIndex,1,4)) ) > 0
@@ -4900,7 +4916,7 @@ STATIC FUNCTION ADO_RELEVAL( nWA, aRelInfo )
 
    nReturn := ADO_EVALBLOCK( aRelInfo[ UR_RI_PARENT ], aRelInfo[ UR_RI_BEXPR ], @uResult )
 
-   IF nReturn == HB_SUCCESS
+   IF nReturn == HB_SUCCESS .AND. ( aRelInfo[ UR_RI_CHILD ] )->( USED() )  //IF CHILD ITS CLOSED CONTINUE AS DBFCDX
 
       /*
        *  Check the current order
@@ -4967,15 +4983,11 @@ STATIC FUNCTION ADO_DBEVAL( nWA, aEvalInfo )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL aScopeInfo := aEvalInfo[ UR_EI_SCOPE ], uResult, n:=0
+   LOCAL oRs := aWAData[ WA_RECORDSET ]
 
    DEFAULT aScopeInfo[ UR_SI_BWHILE ] TO {||.T.}
    DEFAULT aScopeInfo[ UR_SI_BFOR ] TO {||.T.}
    DEFAULT aScopeInfo[ UR_SI_REST ] TO .F.
-
-   //IF !aScopeInfo[ UR_SI_REST ]
-      //ADO_GOTOP( nWA )
-
-   //ENDIF
 
    IF !EMPTY( aScopeInfo[ UR_SI_NEXT ] )
       n := aScopeInfo[ UR_SI_NEXT ]
@@ -4986,13 +4998,24 @@ STATIC FUNCTION ADO_DBEVAL( nWA, aEvalInfo )
       ADO_GOTO( nWA, aScopeInfo[ UR_SI_RECORD ] )
 
    ENDIF
+   
+   IF !aScopeInfo[ UR_SI_REST ]
+      ADO_GOTOP( nWA )
+
+   ENDIF
 
    DO WHILE EVAL( aScopeInfo[ UR_SI_BWHILE ] ) .AND. !aWAData[ WA_EOF ]
       IF EVAL( aScopeInfo[ UR_SI_BFOR ] )
          ADO_EVALBLOCK( nWA, aEvalInfo[ UR_EI_BLOCK ], @uResult )
 
       ENDIF
-      DBSKIP()
+
+      oRs:MoveNext()
+
+      IF ! Empty( aWAData[ WA_PENDINGREL ] )
+        ADO_FORCEREL( nWA )
+
+      ENDIF
 
       n--
       IF n = 0 .OR. !EMPTY( aScopeInfo[ UR_SI_RECORD ] )
@@ -5000,9 +5023,10 @@ STATIC FUNCTION ADO_DBEVAL( nWA, aEvalInfo )
 
       ENDIF
 
+      aWAData[ WA_EOF ] := oRs:Eof()
+
    ENDDO
-
-
+   
    RETURN HB_SUCCESS
 
 
@@ -7099,7 +7123,6 @@ FUNCTION ListTableQuery( aList )
    RETURN aListQry
 
 
-
  /* default values for adordd to use if not present in open or create */
 FUNCTION ADODEFAULTS( cDB, cServer, cPort, cEngine, cUser, cPass, cClass, lGetThem )
    STATIC aDefaults := {}
@@ -7257,11 +7280,10 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
    LOCAL aTables := hb_AdoRddGetTables( oConnection )
    LOCAL n, oRecordSet, z
    LOCAL aFiles :=  ListFieldRecno( ), cTableIndex, y, oRs, nCount := 0
+   LOCAL aMyTables := ListDbfIndex() 
 
-   DEFAULT nRecords TO n_nrecords
+   DEFAULT nRecords TO 0
    DEFAULT aMask TO {}
-
-   n_nrecords := nRecords //static var init
 
    IF oConnection == NIL
       MSGINFO( "The SET ADO PRE OPEN THRESHOLD TO must be placed"+CRLF+;
@@ -7273,7 +7295,7 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
    ENDIF
 
    //NOTHING TO DO HERE!
-   IF n_nrecords = 0 .AND. LEN ( aMask ) = 0
+   IF nrecords = 0 .AND. LEN ( aMask ) = 0
       RETURN NIL
 
    ENDIF
@@ -7284,9 +7306,9 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
    oRs:LockType       := adLockReadOnly
 
    aTables := hb_AdoRddGetTables( oConnection )
-
    FOR n := 1 TO LEN( aTables )
-       IF n_nrecords > 0
+       IF ( nrecords > 0 .OR. ASCAN( aMask, {| x | UPPER( ADO_FILECONVERT( SET( _SET_PATH )+x ) ) $ UPPER( aTables[ n ] ) } ) > 0  );
+          .OR. ( nrecords = 0  .AND. ASCAN( aMask, {| x | UPPER( ADO_FILECONVERT( SET( _SET_PATH )+x ) ) $ UPPER( aTables[ n ] ) } ) > 0   )
           //Table names as used to get field recno if any
           y := ASCAN( aFiles, { | z | AT(  z[ 1 ] ,UPPER( aTables[ n ] ) ) > 0  } )
           IF y > 0
@@ -7298,14 +7320,10 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
           ENDIF
 
           //LOOK OUT TO SYSTEM TABLES WE DONT WANT THEM!
-          TRY
-               oRs:open( "SELECT "+  ADO_GET_FIELD_RECNO( cTableIndex ) +" FROM "+aTables[ n ],  oConnection )
-               oRs:Close()
+          IF ASCAN( aMyTables, {| x | UPPER( x[ 1 ] ) $ UPPER( aTables[ n ] ) } ) = 0
+             LOOP
 
-          CATCH
-               LOOP
-
-          END
+          ENDIF
 
           IF t_cEngine = "ACCESS" .OR. t_cEngine = "SQLITE" .OR.;
              t_cEngine = "FIREBIRD" .OR. t_cEngine== "POSTGRE" .OR.;
@@ -7323,9 +7341,9 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
                      " WHERE TABLE_SCHEMA = '"+ADODEFAULTS( )[ 1 ]+"' AND TABLE_NAME = '"+aTables[ n ] +"'"
 
           ENDIF
+
           //LETS COUNT IT
           oRs:open( cSql, oConnection )
-
           IF ADOEMPTYSET( oRs )
              nCount := 0
 
@@ -7344,26 +7362,27 @@ FUNCTION ADOPREOPENTHRESHOLD( nRecords, aMask )
 
        ENDIF
 
-       IF ( n_nrecords > 0 .AND. nCount >= n_nrecords ) .OR. ASCAN( aMask, {| x | UPPER( ADO_FILECONVERT( SET( _SET_PATH )+x ) ) $ UPPER( aTables[ n ] ) } ) > 0 
-          AADD( a_preopen, { aTables[ n ],  ,  } )
-          z := LEN( a_preopen )
-          a_preopen[ z, 2 ] := ADOCLASSNEW( "ADODB.Recordset" )
-          a_preopen[ z, 2 ]:CursorType     := adOpenStatic
-          a_preopen[ z, 2 ]:CursorLocation := adUseClient
-          a_preopen[ z, 2 ]:LockType       := adLockOptimistic
-          a_preopen[ z, 3 ] := ADOGETQUERY( , UPPER( aTables[ n ] ) )
-          a_preopen[ z, 2 ]:CacheSize := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
+       IF ( ( nrecords > 0 .AND. nCount >= nrecords ) .OR. ASCAN( aMask, {| x | UPPER( ADO_FILECONVERT( SET( _SET_PATH )+x ) ) $ UPPER( aTables[ n ] ) } ) > 0 );
+           .OR. ( nrecords = 0  .AND. ASCAN( aMask, {| x | UPPER( ADO_FILECONVERT( SET( _SET_PATH )+x ) ) $ UPPER( aTables[ n ] ) } ) > 0  )
+           AADD( a_preopen, { aTables[ n ],  ,  } )
+           z := LEN( a_preopen )
+           a_preopen[ z, 2 ] := ADOCLASSNEW( "ADODB.Recordset" )
+           a_preopen[ z, 2 ]:CursorType     := adOpenStatic
+           a_preopen[ z, 2 ]:CursorLocation := adUseClient
+           a_preopen[ z, 2 ]:LockType       := adLockOptimistic
+           a_preopen[ z, 3 ] := ADOGETQUERY( , UPPER( aTables[ n ] ) )
+           a_preopen[ z, 2 ]:CacheSize := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
 
-          //PROPERIES AFFECTING PERFORMANCE TRY defaults
-          t_lAsync := IF( EMPTY( t_lAsync ), .F., t_lAsync )
-          t_lAsyncNoWait := IF( EMPTY( t_lAsyncNoWait ), .F., t_lAsyncNoWait )
-          t_nCacheSize  := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
+           //PROPERIES AFFECTING PERFORMANCE TRY defaults
+           t_lAsync := IF( EMPTY( t_lAsync ), .F., t_lAsync )
+           t_lAsyncNoWait := IF( EMPTY( t_lAsyncNoWait ), .F., t_lAsyncNoWait )
+           t_nCacheSize  := IF( EMPTY( t_nCacheSize ), 300, t_nCacheSize )
 
-          a_preopen[ z, 2 ]:Open( "SELECT * FROM " + aTables[ n ]+a_preopen[ z, 3 ]+" ORDER BY "+;
-                                  ADO_GET_FIELD_RECNO( cTableIndex ), oConnection,;
-                                  adOpenStatic, adLockOptimistic, adCmdText+;
-                                  IF( t_lAsync .AND. t_lAsyncNoWait, adAsyncFetchNonBlocking, ;
-                                     IF( t_lAsync, adAsyncFetch, adOptionUnspecified ) ) )
+           a_preopen[ z, 2 ]:Open( "SELECT * FROM " + aTables[ n ]+a_preopen[ z, 3 ]+" ORDER BY "+;
+                                   ADO_GET_FIELD_RECNO( cTableIndex ), oConnection,;
+                                   adOpenStatic, adLockOptimistic, adCmdText+;
+                                   IF( t_lAsync .AND. t_lAsyncNoWait, adAsyncFetchNonBlocking, ;
+                                      IF( t_lAsync, adAsyncFetch, adOptionUnspecified ) ) )
 
        ENDIF
 
@@ -7441,7 +7460,7 @@ FUNCTION  ADOWHERECLAUSE( nWa, cNewSql ) //changing records in recordset
                          IF( t_lAsync, adAsyncFetch, adOptionUnspecified ) ) )
 
       //PUT IT IN THE "CACHE" FOR NEXT OPENING! DEFINED BY SET THRESHOLD
-      IF n_nrecords > 0 .AND. oRecordSet:RecordCount > n_nrecords
+      IF t_nCacheSize> 0 .AND. oRecordSet:RecordCount > t_nCacheSize
          AADD( a_preopen, { aWAData [ WA_TABLENAME], oRecordSet, aWAData[ WA_QUERY ]} )
          oRecordSet := a_preopen[ LEN( a_preopen ), 2 ]:Clone
 
@@ -7468,7 +7487,7 @@ FUNCTION  ADOWHERECLAUSE( nWa, cNewSql ) //changing records in recordset
 
 
 FUNCTION ADOVERSION()
-   RETURN "AdoRdd Version 1.110417"
+   RETURN "AdoRdd Version 1.170417"
 
 /*                   END ADO SET GET FUNCTONS */
 
