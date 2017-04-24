@@ -975,65 +975,11 @@ STATIC FUNCTION ADO_REFRESH( nWA, lRequery ) //22.08.15
    ELSE
       // NEW RECORDS ADDED BY OTHERS?
       IF aWAData[ WA_RECCOUNT ] < nReccount //only new records
-         //LETS TRY TO CHECK ONLY IF NEW RECORDS ARE RELATED WITH OUR INDEXKEY
-         IF aWAData[ WA_INDEXACTIVE ] > 0
-            xKey := &( INDEXKEY( 0 ))
-            aSeek := ADOPseudoSeek(nWA, xKey, aWAData,,,,lOnlyfirstField)
-            cSql := "SELECT "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] )+;
-               " FROM "+aWAData[ WA_TABLENAME ]+" WHERE "+IF(aSeek[3],aseek[1],aSeek[2])+;
-               " ORDER BY "+ADO_GET_FIELD_RECNO(  aWAData[ WA_TABLEINDEX ] )
-            oRs := TempRecordSet()
-            oRs:CursorType :=   adOpenForwardOnly
-            oRs:CursorLocation := adUseClient
-            oRs:LockType := adLockReadOnly
-            oRs:Open(cSql,aWAData[ WA_CONNECTION ] )
-
-            IF oRs:RecordCount > 0
-               IF oRs:RecordCount < 500
-                  oClone := aWAData[ WA_RECORDSET ]:Clone
-                  //lets look at all app might have recycle routine deleed records
-                  DO WHILE !oRs:Eof()
-                     oClone:MoveFirst()
-                     oClone:Find( (oRs:Fields( 0 ):Name)+ " = '"+;
-                        ALLTRIM( STR(oRs:Fields( 0 ):Value, 11, 0) ) +"'" )
-
-                     IF oClone:Eof() //NEW RECORD!
-                        ADO_REQUERY( nWA , aWAData[ WA_RECORDSET ] )
-                        aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
-                        //re initialize
-                        aWAData[ WA_RECCOUNT ] := nReccount
-                        EXIT
-                     ENDIF
-                     oRs:MoveNext()
-
-                  ENDDO
-                  oClone := NIL
-
-               ELSE  // MORE THAN 500 TO SKIP MAYBE FAST TO DO IT ALL?
-                  ADO_REQUERY( nWA , aWAData[ WA_RECORDSET ] )
-                  aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
-                  //re initialize
-                  aWAData[ WA_RECCOUNT ] := nReccount
-
-               ENDIF
-
-            ELSE  //THERE ARENT ANYMORE RECORDS WITH SAME INDEX KEY VALUE REFRRESH ALL
-               ADO_REQUERY( nWA , aWAData[ WA_RECORDSET ] )
-               aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
-               //re initialize
-               aWAData[ WA_RECCOUNT ] := nReccount
-
-            ENDIF
-
-            oRs:Close()
-            oRs := NIl
-
-         ELSE  //NO INDEXES MUST BE A SMALL TABLE LETS REFESH IT ALL
-            ADO_REQUERY( nWA , aWAData[ WA_RECORDSET ] )
-            aWAData[ WA_RECCOUNT ] := nReccount
-            aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
-
-         ENDIF
+         //PAY ATTENTION TO ADOWHERECLAUSE AND SET RECORDSET OPEN WHERE CLAUSE BECAUSE THE NEW RECORD MIGHT NOT BE VISIBLE!
+         ADO_REQUERY( nWA , aWAData[ WA_RECORDSET ] )
+         aWAData[ WA_LREQUERY ] := .T. //already requeried set to .f.
+         //re initialize
+         aWAData[ WA_RECCOUNT ] := nReccount
 
          ADO_GOTO( nWA, nRecNo )
 
@@ -1389,6 +1335,7 @@ STATIC FUNCTION ADO_SKIPRAW( nWA, nToSkip )
       //MAYBE REFRESH THE SET AS IN CLIPPER SKIP 0
       //ENFORCE RELATIONS SHOULD BE BELOW AFTER MOVING TO NEXT RECORD
       ADO_REFRESH( nWA ) //21.10.15 IS IT TO SLOW HERE
+      ADO_RESYNC( nWA, oRecordSet ) 
       IF ! Empty( aWAData[ WA_PENDINGREL ] )
          ADO_FORCEREL( nWA )
 
@@ -1940,7 +1887,7 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
 
    LOCAL aWAData := USRRDD_AREADATA( nWA )
    LOCAL oRecordSet := aWAData[ WA_RECORDSET ]
-   LOCAL nRecNo,oError,cDateFormat
+   LOCAL nRecNo,oError,cDateFormat, oErr
    //10.08.15
    LOCAL aStruct ,xBook
    LOCAL aBookMarks := {}, bForExp, nPos, cValue
@@ -2045,21 +1992,30 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
             //XhARBOUR HAS SOME PROBLEMS WITH DATES WITH THIS 100% OK VALTYPE( xValue )   <> "O" //ADONULL
             //VERSION XHARBOUR
             IF aStruct[2] $ "DT" //14.6.15 .AND.  VALTYPE( xValue )   <> "O"
-               aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
-               ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ), ;
-                                aWAData[ WA_ENGINE ] ) + " = " +;
-               IF( VALTYPE( xValue )   <> "O", "'"+CVALTOCHAR( xValue )+"'", 'NULL' )+;
-                   " WHERE " + ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
-                                                aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ),,adExecuteNoRecords  )
+               TRY 
+                  aWAData[ WA_CONNECTION ]:Execute( "UPDATE "+aWAData[ WA_TABLENAME ]+" SET "+;
+                  ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields( nField - 1 ):Name ), ;
+                                   aWAData[ WA_ENGINE ] ) + " = " +;
+                  IF( VALTYPE( xValue )   <> "O", "'"+CVALTOCHAR( xValue )+"'", 'NULL' )+;
+                      " WHERE " + ADOQUOTEDCOLSQL( Trim( oRecordSet:Fields(aWAData[WA_FIELDRECNO]):Name ),;
+                                                   aWAData[ WA_ENGINE ] )+" = "+ALLTRIM( STR( nRecNo, 10, 0 ) ),,adExecuteNoRecords  )
 
-               //22.08.15
-               //if we are in a diferent record of what we should ex was deleted by others
-               // if we are with lock on it an not in :update
-               // otherwise it woulnt be updated with UPDATE it do nothing
-               IF PROCNAME( 1 ) <> "__DBCOPY"
-                  ADO_RESYNC( nWA, oRecordSet )
+                  //22.08.15
+                  //if we are in a diferent record of what we should ex was deleted by others
+                  // if we are with lock on it an not in :update
+                  // otherwise it woulnt be updated with UPDATE it do nothing
+                  IF PROCNAME( 1 ) <> "__DBCOPY"
+                     ADO_RESYNC( nWA, oRecordSet )
 
-               ENDIF
+                  ENDIF
+
+               CATCH oError
+                   oErr := ADOSHOWERROR( aWAData[ WA_CONNECTION ], aWAData[ WA_TABLENAME ], .T. )
+                   oError:description := oErr:Description
+                   oError:SubCode := oErr:NativeError
+                   THROW( oError )
+
+               END
 
             ELSE
                DO CASE
@@ -2095,6 +2051,10 @@ STATIC FUNCTION ADO_PUTVALUE( nWA, nField, xValue )
                     CATCH
                         ADOSTATUSMSG( oRecordSet:Status,oRecordSet:Fields( nField - 1 ):Name,;
                              oRecordSet:Fields( nField - 1 ):Value, xValue, oRecordSet:LockType )
+                        oErr := ADOSHOWERROR( aWAData[ WA_CONNECTION ], aWAData[ WA_TABLENAME ], .T. )
+                        oError:description := oErr:Description
+                        oError:SubCode := oErr:NativeError
+                        THROW( oError )
 
                     END
 
@@ -3710,6 +3670,9 @@ STATIC FUNCTION ADOGETORDINFO( nWA, nOption, aInfo )
 STATIC FUNCTION ADO_ORDLSTREBUILD( nWA, aOrderInfo )
     //DOES NOTHING AS INDEXES ARE VIRTUAL THEY REALLY DONT EXIST AS FILES
     //ITS HERE ONLY REDEFINE SUPER FUNCTION AND TO AVOID ERROR.
+    //ONLY RE ACTIVATE INDEX (SORT ) OF THE RECORDSET AT ADO_ORLSTFOCUS
+
+    ( nWa )->( ORDSETFOCUS( ORDSETFOCUS() ) )
 
     RETURN HB_SUCCESS
 
