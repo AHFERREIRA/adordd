@@ -256,7 +256,7 @@
     SELE 0
     USE table2 ALIAS "TEST2"
     EXPALIAS()
-
+    
     //LOCKING TRIALS
     GOTO 1  
     IF DBRLOCK(1)
@@ -328,7 +328,7 @@
     MSGINFO("INDEXED BY ADRESS")
     EXPALIAS()
     BROWSE()
-
+    
     //working directly with recordset in another area
     MSGINFO("GET RECORDSET FOR TABLE TEST1 "+STR(SELECT("TEST1")) )
 
@@ -340,21 +340,25 @@
     MSGINFO("NEW SELECT FOR RECORDSET TEST1 "+AA)
     oRs:open(aa,hb_adoRddGetConnection(SELECT("TEST1")))
 
-    MSGINFO("CURRENT WORKAREA "+ALIAS())
-
-    MSGINFO("BROWSE RECORDSET ALIAS TEST1")
-    TEST1->(BROWSE())
-
+    SELE TEST1
+    EXPALIAS()
+    BROWSE()
+    REINDEX
+    EXPALIAS()
+    BROWSE()
+ 
     SELE TEST2
     MSGINFO("LETS SUPPOSE THAT TABLE HAS MILLIONS OF ROWS AND RECORDSET > 100k"+CRLF+;
             "WE NEED TO REDUCE TEMPORARLY RECORDSET TO RUN SOME SUM OPERATIONS")
     cSql := adowhereclause( Select(), "phone = '01 2920002'" )
     MSGINFO("APPLY NEW WHERE CLAUSE ALL AREA INFORMATION CONTINUES THE SAME"+CRLF+;
             "phone = '01 2920002'")
+    EXPALIAS()
     BROWSE()
     MSGINFO("GET BACK TO THE PREVIOUS QUERY "+CRLF+;
              csql )
     adowhereclause( Select(), csql )
+    EXPALIAS()
     BROWSE()
 
     MSGINFO("DOES TABLE1 EXISTS ON DB ?"+CVALTOCHAR(hb_adoRddExistsTable( ,"Table1") ))
